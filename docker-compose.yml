@@ -2,53 +2,12 @@ services:
   mediamtx:
     image: bluenviron/mediamtx:latest
     container_name: mediamtx
-    network_mode: host
+    ports:
+      - "8554:8554" # RTSP
+      - "8888:8888" # HLS
+      - "8889:8889" # WebRTC HTTP
+      - "1935:1935" # RTMP (optional)
+      - "8189:8189/udp" # WebRTC ICE/UDP
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
-    restart: unless-stopped
-
-  api:
-    image: python:3.12-slim
-    container_name: var_api
-    working_dir: /app
-    command: bash -lc "pip install fastapi uvicorn pyyaml && uvicorn main:app --host 0.0.0.0 --port 8000"
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./values.yaml:/config/values.yaml:ro
-      - ./data/meta:/data/meta
-      - ./api:/app
-    restart: unless-stopped
-
-  screen:
-    image: nginx:alpine
-    container_name: var_screen
-    ports:
-      - "8080:80"
-    volumes:
-      - ./screen:/usr/share/nginx/html:ro
-      - ./values.yaml:/usr/share/nginx/html/values.yaml:ro
-    restart: unless-stopped
-
-  viewer:
-    image: nginx:alpine
-    container_name: var_viewer
-    ports:
-      - "8081:80"
-    volumes:
-      - ./viewer:/usr/share/nginx/html:ro
-      - ./values.yaml:/usr/share/nginx/html/values.yaml:ro
-    restart: unless-stopped
-
-  recorder:
-    image: linuxserver/ffmpeg:latest
-    container_name: var_recorder
-    network_mode: host
-    volumes:
-      - ./values.yaml:/config/values.yaml:ro
-      - ./recorder:/recorder:ro
-      - ./data/videos:/data/videos
-      - ./data/clips:/data/clips
-      - ./data/meta:/data/meta
-    entrypoint: ["/bin/sh", "/recorder/record.sh"]
     restart: unless-stopped

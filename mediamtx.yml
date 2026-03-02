@@ -2,11 +2,4 @@ logLevel: info
 
 # Optional: allow RTSP pull from cameras (recommended)
 paths:
-  court1_camA:
-    source: rtsp://USER:PASS@192.168.1.101:554/stream1
-  court1_camB:
-    source: rtsp://USER:PASS@192.168.1.102:554/stream1
-  court1_camC:
-    source: rtsp://USER:PASS@192.168.1.103:554/stream1
-  court1_camD:
-    source: rtsp://USER:PASS@192.168.1.104:554/stream1
+  court1_camA: {}

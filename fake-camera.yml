@@ -1,0 +1,16 @@
+services:
+  fakecam:
+    image: linuxserver/ffmpeg:latest
+    container_name: fake_camera
+    depends_on:
+      - mediamtx
+    volumes:
+      - ./sample:/sample:ro
+    command: >
+      -re -stream_loop -1
+      -i /sample/sample.mp4
+      -c:v libx264 -preset veryfast -tune zerolatency
+      -pix_fmt yuv420p -g 60 -keyint_min 60
+      -c:a aac -ar 48000 -b:a 128k
+      -f rtsp rtsp://mediamtx:8554/court1_camA
+x
