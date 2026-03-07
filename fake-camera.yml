@@ -13,4 +13,4 @@ services:
       -pix_fmt yuv420p -g 60 -keyint_min 60
       -c:a aac -ar 48000 -b:a 128k
       -f rtsp rtsp://mediamtx:8554/court1_camA
-x
+    restart: unless-stopped

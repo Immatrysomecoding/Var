@@ -3,11 +3,31 @@ services:
     image: bluenviron/mediamtx:latest
     container_name: mediamtx
     ports:
-      - "8554:8554" # RTSP
-      - "8888:8888" # HLS
-      - "8889:8889" # WebRTC HTTP
-      - "1935:1935" # RTMP (optional)
-      - "8189:8189/udp" # WebRTC ICE/UDP
+      - "8554:8554"
+      - "8888:8888"
+      - "8889:8889"
+      - "1935:1935"
+      - "8189:8189/udp"
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: var_api
+    ports:
+      - "8000:8000"
+    environment:
+      - MEDIA_HOST=host.docker.internal
+    volumes:
+      - ./data/meta:/data/meta
+    restart: unless-stopped
+
+  viewer:
+    image: nginx:alpine
+    container_name: var_viewer
+    ports:
+      - "8081:80"
+    volumes:
+      - ./viewer:/usr/share/nginx/html:ro
     restart: unless-stopped

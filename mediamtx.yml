@@ -1,5 +1,7 @@
 logLevel: info
 
-# Optional: allow RTSP pull from cameras (recommended)
 paths:
   court1_camA: {}
+  #court1_camB: {}
+  #court1_camC: {}
+  #court1_camD: {}

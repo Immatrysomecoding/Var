@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Court Viewer</title>
+  </head>
+  <body>
+    <div id="app">
+      <h3 id="title">Connecting…</h3>
+      <video
+        id="player"
+        controls
+        playsinline
+        webkit-playsinline
+        style="width: 100%; max-width: 900px"
+      ></video>
+      <p id="status"></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.1/dist/hls.min.js"></script>
+    <script>
+      const sessionId =
+        new URLSearchParams(window.location.search).get("id") ||
+        window.location.pathname.split("/").pop();
+      const API_BASE = "/api"; // if served same origin; otherwise full base (https://edge.local)
+      async function start() {
+        if (!sessionId) {
+          document.getElementById("title").innerText = "Missing session ID";
+          return;
+        }
+        document.getElementById("title").innerText =
+          "Connecting to session " + sessionId;
+        try {
+          const res = await fetch(`${API_BASE}/session/${sessionId}`);
+          if (!res.ok) throw new Error("Session not found");
+          const data = await res.json();
+          const url = data.stream_url_hls;
+          const video = document.getElementById("player");
+
+          if (Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = url;
+            await video.play();
+          } else {
+            throw new Error("No HLS support");
+          }
+
+          // log open event
+          await fetch(`${API_BASE}/event`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              event: "open",
+              meta: { ua: navigator.userAgent },
+            }),
+          });
+
+          // log close on unload
+          window.addEventListener("beforeunload", () => {
+            navigator.sendBeacon(
+              `${API_BASE}/event`,
+              JSON.stringify({ session_id: sessionId, event: "close" }),
+            );
+          });
+        } catch (e) {
+          document.getElementById("status").innerText = "Error: " + e.message;
+        }
+      }
+      start();
+    </script>
+  </body>
+</html>

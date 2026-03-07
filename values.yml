@@ -4,45 +4,54 @@ app:
   timezone: "Asia/Ho_Chi_Minh"
   logLevel: "info" # debug | info | warn | error
 
+api:
+  host: "0.0.0.0"
+  port: 8000
+
+viewer:
+  publicBase: "http://edge.local" # used to generate QR URLs
+
 deployment:
-  locationId: "playground-hcm-01"   # venue/site id
+  locationId: "playground-hcm-01" # venue/site id
   venueName: "Playground Pickleball"
-  edgeNodeId: "edge-01"             # the mini-pc/nvr device id
+  edgeNodeId: "edge-01" # the mini-pc/nvr device id
   fieldCount: 4
   defaultFieldId: "court-1"
 
 network:
-  domain: "var.local"               # or your public domain
+  domain: "var.local" # or your public domain
   httpPort: 8080
   https: false
   cors:
     enabled: true
     allowOrigins:
-      - "*"                         # open viewing (as you want)
+      - "*" # open viewing (as you want)
   qr:
     enabled: true
     baseUrl: "https://var.app"
     pathTemplate: "/f/{sessionId}"
 
 access:
-  mode: "qr-only"                  # qr-only | public | private
+  mode: "qr-only" # qr-only | public | private
+  idLength: 12
+  sessionExpiryHours: 72 # optional auto-expiry
   searchable: false
   session:
-    type: "field"                  # field | match
-    idLength: 8                    # random string length
-    rotateOnRestart: false         # keep same QR per field
-    rotateOnMatchEnd: false        # future option
+    type: "field" # field | match
+    idLength: 8 # random string length
+    rotateOnRestart: false # keep same QR per field
+    rotateOnMatchEnd: false # future option
 
 security:
   auth:
-    enabled: false                  # open watching
+    enabled: false # open watching
   tokens:
-    replayControlRequired: false    # screen has local control anyway
+    replayControlRequired: false # screen has local control anyway
 
 ui:
   screen:
     enabled: true
-    defaultLayout: "single"         # single | grid2 | grid4
+    defaultLayout: "single" # single | grid2 | grid4
     allowCameraSwitch: true
     showTimeline: true
     replayButtonsSeconds: [5, 10, 15]
@@ -53,12 +62,12 @@ ui:
       maxClipSeconds: 60
   web:
     enabled: true
-    mode: "view"                    # view | view+control (later)
+    mode: "view" # view | view+control (later)
     allowClips: true
     allowDownload: true
   mobile:
     enabled: true
-    webAppFirst: true               # start with PWA, native later
+    webAppFirst: true # start with PWA, native later
 
 fields:
   - fieldId: "court-1"
@@ -73,7 +82,7 @@ fields:
           resolution: "1920x1080"
         sync:
           enabled: true
-          timeSource: "ntp"         # ntp | rtp | manual
+          timeSource: "ntp" # ntp | rtp | manual
       - cameraId: "c1-cam-b"
         name: "Baseline B"
         stream:
@@ -85,12 +94,12 @@ fields:
           enabled: true
           timeSource: "ntp"
     replay:
-      bufferSeconds: 45             # how far back you can instantly replay
+      bufferSeconds: 45 # how far back you can instantly replay
       defaultReplaySeconds: 10
     recording:
       enabled: true
-      mode: "continuous"            # continuous | on-demand
-      splitMinutes: 30              # file chunking for stability
+      mode: "continuous" # continuous | on-demand
+      splitMinutes: 30 # file chunking for stability
     storagePolicy:
       keepFullMatchDays: 7
       keepClipsDays: 180
@@ -98,26 +107,26 @@ fields:
 
 streaming:
   enabled: true
-  protocol: "webrtc"                # webrtc for low-latency viewing
+  protocol: "webrtc" # webrtc for low-latency viewing
   viewerLimits:
-    perFieldMaxViewers: 200         # depends on your network/infra
+    perFieldMaxViewers: 200 # depends on your network/infra
   social:
     enabled: true
     outputs:
       - platform: "youtube"
         enabled: true
-        rtmpUrl: ""                 # filled per event/session if needed
+        rtmpUrl: "" # filled per event/session if needed
       - platform: "facebook"
         enabled: false
         rtmpUrl: ""
 
 storage:
-  mode: "edge"                      # edge | hybrid | cloud
+  mode: "edge" # edge | hybrid | cloud
   edge:
     basePath: "/data/var-basic"
     maxDiskGb: 800
   cloud:
-    provider: "s3"                  # s3 | gcs | azure (later)
+    provider: "s3" # s3 | gcs | azure (later)
     bucket: ""
     region: ""
     uploadClipsOnly: true
@@ -125,7 +134,7 @@ storage:
 metadata:
   enabled: true
   db:
-    type: "sqlite"                  # sqlite now, postgres later
+    type: "sqlite" # sqlite now, postgres later
     path: "/data/var-basic/meta.db"
   events:
     logReplayClicks: true
@@ -137,11 +146,11 @@ metadata:
 futureAiHooks:
   enabled: true
   cameraCalibration:
-    required: false                 # not strict now
+    required: false # not strict now
     storeIntrinsics: true
     storeExtrinsics: true
   courtGeometry:
-    storeLineCoordinates: true      # later: in/out decisions
+    storeLineCoordinates: true # later: in/out decisions
   annotation:
     enabled: true
     simpleTags: ["in", "out", "fault", "unknown"]
