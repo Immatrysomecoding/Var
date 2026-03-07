@@ -73,7 +73,7 @@ def create_session(req: SessionCreateRequest):
         "session_id": session_id,
         "field_id": req.field_id,
         "stream_path": req.stream_path,
-        "viewer_url": f"http://localhost:8081/?id={session_id}"
+        "viewer_url": f"http://localhost:8081/f/{session_id}"
     }
 
 @app.get("/api/session/{session_id}")

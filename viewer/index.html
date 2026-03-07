@@ -1,77 +1,175 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Court Viewer</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #111;
+        color: #fff;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      h1 {
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+      .meta {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-bottom: 12px;
+      }
+      video {
+        width: 100%;
+        max-width: 960px;
+        background: #000;
+        border-radius: 12px;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 14px;
+        opacity: 0.9;
+      }
+    </style>
   </head>
   <body>
-    <div id="app">
-      <h3 id="title">Connecting…</h3>
+    <div class="wrap">
+      <h1 id="title">Connecting...</h1>
+      <div class="meta" id="meta"></div>
       <video
         id="player"
         controls
+        autoplay
         playsinline
         webkit-playsinline
-        style="width: 100%; max-width: 900px"
       ></video>
-      <p id="status"></p>
+      <div class="status" id="status"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.1/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-      const sessionId =
-        new URLSearchParams(window.location.search).get("id") ||
-        window.location.pathname.split("/").pop();
-      const API_BASE = "/api"; // if served same origin; otherwise full base (https://edge.local)
-      async function start() {
-        if (!sessionId) {
-          document.getElementById("title").innerText = "Missing session ID";
-          return;
+      const API_BASE = "http://localhost:8000/api";
+
+      function getSessionId() {
+        const url = new URL(window.location.href);
+
+        const queryId = url.searchParams.get("id");
+        if (queryId) return queryId;
+
+        const parts = url.pathname.split("/").filter(Boolean);
+
+        // supports /f/<sessionId>
+        if (parts.length >= 2 && parts[0] === "f") {
+          return parts[1];
         }
-        document.getElementById("title").innerText =
-          "Connecting to session " + sessionId;
+
+        return null;
+      }
+
+      async function postEvent(sessionId, event, meta = {}) {
         try {
-          const res = await fetch(`${API_BASE}/session/${sessionId}`);
-          if (!res.ok) throw new Error("Session not found");
-          const data = await res.json();
-          const url = data.stream_url_hls;
-          const video = document.getElementById("player");
-
-          if (Hls.isSupported()) {
-            const hls = new Hls();
-            hls.loadSource(url);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = url;
-            await video.play();
-          } else {
-            throw new Error("No HLS support");
-          }
-
-          // log open event
           await fetch(`${API_BASE}/event`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              session_id: sessionId,
-              event: "open",
-              meta: { ua: navigator.userAgent },
-            }),
+            body: JSON.stringify({ session_id: sessionId, event, meta }),
+          });
+        } catch (err) {
+          console.warn("event log failed", err);
+        }
+      }
+
+      async function start() {
+        const sessionId = getSessionId();
+        const titleEl = document.getElementById("title");
+        const metaEl = document.getElementById("meta");
+        const statusEl = document.getElementById("status");
+        const video = document.getElementById("player");
+
+        if (!sessionId) {
+          titleEl.textContent = "Missing session ID";
+          statusEl.textContent = "Open this page with ?id=YOUR_SESSION_ID";
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API_BASE}/session/${sessionId}`);
+          if (!res.ok) {
+            throw new Error(`Session not found (${res.status})`);
+          }
+
+          const data = await res.json();
+
+          titleEl.textContent = `Watching ${data.field_id}`;
+          metaEl.textContent = `Stream path: ${data.stream_path}`;
+
+          const hlsUrl = data.stream_url_hls;
+
+          if (Hls.isSupported()) {
+            const hls = new Hls({
+              lowLatencyMode: false,
+            });
+
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, async function () {
+              try {
+                await video.play();
+                statusEl.textContent = "Live stream playing";
+              } catch (e) {
+                statusEl.textContent = "Tap play to start stream";
+              }
+            });
+
+            hls.on(Hls.Events.ERROR, function (_, eventData) {
+              console.error("HLS error", eventData);
+              statusEl.textContent = "Playback error";
+            });
+          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = hlsUrl;
+            video.addEventListener("loadedmetadata", async () => {
+              try {
+                await video.play();
+              } catch (e) {
+                statusEl.textContent = "Tap play to start stream";
+              }
+            });
+          } else {
+            throw new Error("This browser does not support HLS");
+          }
+
+          await postEvent(sessionId, "open", {
+            userAgent: navigator.userAgent,
           });
 
-          // log close on unload
           window.addEventListener("beforeunload", () => {
             navigator.sendBeacon(
               `${API_BASE}/event`,
-              JSON.stringify({ session_id: sessionId, event: "close" }),
+              new Blob(
+                [
+                  JSON.stringify({
+                    session_id: sessionId,
+                    event: "close",
+                    meta: {},
+                  }),
+                ],
+                { type: "application/json" },
+              ),
             );
           });
-        } catch (e) {
-          document.getElementById("status").innerText = "Error: " + e.message;
+        } catch (err) {
+          console.error(err);
+          titleEl.textContent = "Could not connect";
+          statusEl.textContent = err.message;
         }
       }
+
       start();
     </script>
   </body>

@@ -1,0 +1,27 @@
+docker compose -f docker-compose.yml -f fake-camera.yml down
+docker compose -f docker-compose.yml -f fake-camera.yml up --build
+
+//to get the url during testing
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/api/session `
+  -ContentType "application/json" `
+  -Body '{"field_id":"court1","stream_path":"court1_camA"}'
+
+  Milestone A: Viewer service
+  - Create session bd and meta data for later ai train ~ Done
+  - Loop a video then decode using ffmerpg(later change to real cam) ~ Done
+  - Establish mediamtx hub ~ Done
+  - Make a tiny web page that plays HLS ~ Done
+  - QR points to /f/<sessionId> ~ Done
+  - Generate random qr based on courst id(Interact through screen service) ~ Done
+  - 
+  - 
+
+  Milestone B: Screen service
+  - Show the live feed on screen(currently another laptop)
+  - Switch camera in court
+  - Replay last 5 / 10 / 15 seconds (currently followed proper replay from recorded segments for instead buffer) 
+  - Slow moton 
+  - Create clip
+  - Log metadata for every action for later train
