@@ -1,7 +1,13 @@
 logLevel: info
 
+hls: yes
+hlsAlwaysRemux: yes
+hlsSegmentDuration: 2s
+hlsPartDuration: 200ms
+hlsSegmentCount: 30
+
 paths:
   court1_camA: {}
-  #court1_camB: {}
-  #court1_camC: {}
-  #court1_camD: {}
+  court1_camB: {}
+  court1_camC: {}
+  court1_camD: {}

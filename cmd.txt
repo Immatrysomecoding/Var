@@ -15,13 +15,22 @@ Invoke-RestMethod `
   - Make a tiny web page that plays HLS ~ Done
   - QR points to /f/<sessionId> ~ Done
   - Generate random qr based on courst id(Interact through screen service) ~ Done
-  - 
+  - UI/UX ~ later
   - 
 
   Milestone B: Screen service
-  - Show the live feed on screen(currently another laptop)
-  - Switch camera in court
-  - Replay last 5 / 10 / 15 seconds (currently followed proper replay from recorded segments for instead buffer) 
-  - Slow moton 
-  - Create clip
-  - Log metadata for every action for later train
+  - Show the live feed on screen(currently another laptop) ~ Done
+  - Switch camera in court ~ Done
+  - Replay last 5 / 10 / 15 seconds (currently followed proper replay from recorded segments for instead buffer) ~ Done
+  - Store segment data for later train ~ Done
+  - Clip but since it not live ~ later
+  - Slow moton ~ maybe
+  - Log metadata for every action for later train ~ Done
+  - UI/UX ~ later
+  - 
+  -
+  -
+  Milestone C: Live + metadata
+  - Live on fb api ~ Done
+  - Clip and download ~ later
+  

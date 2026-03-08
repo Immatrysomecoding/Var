@@ -1,19 +1,23 @@
-# api/main.
-#SQLAlchemy + migrations + auth use these when done
 import os
 import time
 import uuid
 import json
 import sqlite3
+import subprocess
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 DB_PATH = "/data/meta/meta.db"
 MEDIA_HOST = os.environ.get("MEDIA_HOST", "localhost")
+RECORDINGS_ROOT = Path("/data/recordings")
+REPLAYS_ROOT = Path("/data/replays")
 
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+REPLAYS_ROOT.mkdir(parents=True, exist_ok=True)
 
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 conn.execute("""
@@ -36,6 +40,7 @@ CREATE TABLE IF NOT EXISTS events (
 conn.commit()
 
 app = FastAPI(title="VAR Basic API")
+app.mount("/replays", StaticFiles(directory=str(REPLAYS_ROOT)), name="replays")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +58,11 @@ class EventRequest(BaseModel):
     session_id: str
     event: str
     meta: dict = {}
+
+class ClipRequest(BaseModel):
+    field_id: str
+    camera_id: str
+    seconds: int = 10
 
 @app.get("/api/health")
 def health():
@@ -106,3 +116,130 @@ def log_event(req: EventRequest):
     conn.commit()
 
     return {"ok": True}
+
+def get_latest_segments(camera_id: str, required_seconds: int):
+    camera_dir = RECORDINGS_ROOT / camera_id
+    if not camera_dir.exists():
+      return []
+
+    files = sorted(camera_dir.glob("*.mp4"))
+    if not files:
+      return []
+
+    # assume 5-second segments for now
+    needed_count = max(1, (required_seconds + 4) // 5 + 1)
+    return files[-needed_count:]
+
+def build_concat_file(segment_paths, concat_file_path: Path):
+    with concat_file_path.open("w", encoding="utf-8") as f:
+        for p in segment_paths:
+            f.write(f"file '{p.as_posix()}'\n")
+
+def ffprobe_duration(file_path: Path) -> float:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(file_path)
+        ],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    return float(result.stdout.strip())
+
+@app.post("/api/clip")
+def create_clip(req: ClipRequest):
+    camera_id = req.camera_id
+    seconds = max(5, min(req.seconds, 60))
+
+    segments = get_latest_segments(camera_id, seconds)
+    if not segments:
+        raise HTTPException(status_code=404, detail="no recording segments found yet")
+
+    clip_id = uuid.uuid4().hex[:10]
+    concat_path = REPLAYS_ROOT / f"concat_{clip_id}.txt"
+    temp_joined = REPLAYS_ROOT / f"joined_{clip_id}.mp4"
+    output_clip = REPLAYS_ROOT / f"replay_{clip_id}.mp4"
+
+    build_concat_file(segments, concat_path)
+
+    try:
+        # join recent segments
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(concat_path),
+                "-c", "copy",
+                str(temp_joined)
+            ],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+        total_duration = ffprobe_duration(temp_joined)
+        start_time = max(0, total_duration - seconds)
+
+        # trim exact last N seconds
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss", str(start_time),
+                "-i", str(temp_joined),
+                "-t", str(seconds),
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-c:a", "aac",
+                str(output_clip)
+            ],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+        conn.execute(
+            "INSERT INTO events (session_id, event_type, ts, meta) VALUES (?, ?, ?, ?)",
+            (
+                "screen-local",
+                "clip_created",
+                time.time(),
+                json.dumps({
+                    "field_id": req.field_id,
+                    "camera_id": camera_id,
+                    "seconds": seconds,
+                    "clip_file": output_clip.name
+                })
+            )
+        )
+        conn.commit()
+
+        return {
+            "ok": True,
+            "camera_id": camera_id,
+            "seconds": seconds,
+            "clip_url": f"http://localhost:8000/replays/{output_clip.name}",
+            "clip_file": output_clip.name
+        }
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "ffmpeg failed while building clip",
+                "stderr": e.stderr[-2000:] if e.stderr else ""
+            }
+        )
+    finally:
+        for p in [concat_path, temp_joined]:
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass

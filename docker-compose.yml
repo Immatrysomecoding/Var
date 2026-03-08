@@ -32,3 +32,24 @@ services:
       - ./viewer:/usr/share/nginx/html:ro
       - ./viewer/default.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
+
+  screen:
+    image: nginx:alpine
+    container_name: var_screen
+    ports:
+      - "8082:80"
+    volumes:
+      - ./screen:/usr/share/nginx/html:ro
+      - ./screen/default.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+  recorder:
+    image: linuxserver/ffmpeg:latest
+    container_name: var_recorder
+    depends_on:
+      - mediamtx
+    volumes:
+      - ./recorder:/recorder:ro
+      - ./data/recordings:/data/recordings
+    entrypoint: ["/bin/sh", "/recorder/record.sh"]
+    restart: unless-stopped
