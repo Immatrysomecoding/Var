@@ -1,3 +1,7 @@
+//Consider implement dvr window for better fine-tuned user experience
+//Consider second behind live
+//Consider live edge and fine-tune hls
+//Consider do it after the v0.1 of testing phrase
 const API_BASE = "http://localhost:8000/api";
 const MEDIA_HOST = "localhost";
 const DVR_WINDOW_SECONDS = 60;

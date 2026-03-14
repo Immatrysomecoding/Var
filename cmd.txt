@@ -14,7 +14,7 @@ Invoke-RestMethod `
   - Establish mediamtx hub ~ Done
   - Make a tiny web page that plays HLS ~ Done
   - QR points to /f/<sessionId> ~ Done
-  - Generate random qr based on courst id(Interact through screen service) ~ Done
+  - Generate random qr based on session id(Interact through screen service) ~ Done
   - UI/UX ~ later
   - 
 
@@ -30,7 +30,11 @@ Invoke-RestMethod `
   - 
   -
   -
+  
   Milestone C: Live + metadata
   - Live on fb api ~ Done
   - Clip and download ~ later
+
+  Milestone D: auto hightlight
+   - 
   
