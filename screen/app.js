@@ -2,8 +2,8 @@
 //Consider second behind live
 //Consider live edge and fine-tune hls
 //Consider do it after the v0.1 of testing phrase
-const API_BASE = "http://localhost:8000/api";
-const MEDIA_HOST = "localhost";
+const API_BASE = `http://${window.location.hostname}:8000/api`;
+const MEDIA_HOST = window.location.hostname;
 const DVR_WINDOW_SECONDS = 60;
 
 const video = document.getElementById("player");

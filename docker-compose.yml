@@ -21,6 +21,8 @@ services:
       - MEDIA_HOST=localhost #change localhost to test/ ip to connect through phone/ webdomain when deployed
     volumes:
       - ./data/meta:/data/meta
+      - ./data/recordings:/data/recordings:ro
+      - ./data/replays:/data/replays
     restart: unless-stopped
 
   viewer:

@@ -4,6 +4,7 @@ import uuid
 import json
 import sqlite3
 import subprocess
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,6 +16,7 @@ DB_PATH = "/data/meta/meta.db"
 MEDIA_HOST = os.environ.get("MEDIA_HOST", "localhost")
 RECORDINGS_ROOT = Path("/data/recordings")
 REPLAYS_ROOT = Path("/data/replays")
+RECORDING_TTL_HOURS = int(os.environ.get("RECORDING_TTL_HOURS", "2"))
 
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 REPLAYS_ROOT.mkdir(parents=True, exist_ok=True)
@@ -37,7 +39,29 @@ CREATE TABLE IF NOT EXISTS events (
     meta TEXT
 )
 """)
+conn.execute("CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id)")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts)")
 conn.commit()
+
+def cleanup_old_recordings():
+    cutoff = time.time() - RECORDING_TTL_HOURS * 3600
+    if RECORDINGS_ROOT.exists():
+        for segment in RECORDINGS_ROOT.glob("**/*.mp4"):
+            if segment.stat().st_mtime < cutoff:
+                try:
+                    segment.unlink()
+                except Exception:
+                    pass
+
+def _cleanup_loop():
+    while True:
+        try:
+            cleanup_old_recordings()
+        except Exception:
+            pass
+        time.sleep(1800)  # run every 30 minutes
+
+threading.Thread(target=_cleanup_loop, daemon=True).start()
 
 app = FastAPI(title="VAR Basic API")
 app.mount("/replays", StaticFiles(directory=str(REPLAYS_ROOT)), name="replays")
@@ -63,6 +87,7 @@ class ClipRequest(BaseModel):
     field_id: str
     camera_id: str
     seconds: int = 10
+    session_id: str = "screen-local"
 
 @app.get("/api/health")
 def health():
@@ -83,7 +108,7 @@ def create_session(req: SessionCreateRequest):
         "session_id": session_id,
         "field_id": req.field_id,
         "stream_path": req.stream_path,
-        "viewer_url": f"http://localhost:8081/f/{session_id}"
+        "viewer_url": f"http://{MEDIA_HOST}:8081/f/{session_id}"
     }
 
 @app.get("/api/session/{session_id}")
@@ -207,7 +232,7 @@ def create_clip(req: ClipRequest):
         conn.execute(
             "INSERT INTO events (session_id, event_type, ts, meta) VALUES (?, ?, ?, ?)",
             (
-                "screen-local",
+                req.session_id,
                 "clip_created",
                 time.time(),
                 json.dumps({
@@ -224,7 +249,7 @@ def create_clip(req: ClipRequest):
             "ok": True,
             "camera_id": camera_id,
             "seconds": seconds,
-            "clip_url": f"http://localhost:8000/replays/{output_clip.name}",
+            "clip_url": f"http://{MEDIA_HOST}:8000/replays/{output_clip.name}",
             "clip_file": output_clip.name
         }
 
