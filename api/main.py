@@ -5,6 +5,7 @@ import json
 import sqlite3
 import subprocess
 import threading
+import concurrent.futures
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -62,6 +63,9 @@ def _cleanup_loop():
         time.sleep(1800)  # run every 30 minutes
 
 threading.Thread(target=_cleanup_loop, daemon=True).start()
+
+_clip_jobs: dict = {}
+_clip_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
 app = FastAPI(title="VAR Basic API")
 app.mount("/replays", StaticFiles(directory=str(REPLAYS_ROOT)), name="replays")
@@ -175,6 +179,62 @@ def ffprobe_duration(file_path: Path) -> float:
     )
     return float(result.stdout.strip())
 
+def _run_clip_job(job_id: str, req: "ClipRequest", seconds: int, segments: list):
+    _clip_jobs[job_id] = {"status": "running"}
+    camera_id = req.camera_id
+    clip_id = uuid.uuid4().hex[:10]
+    concat_path = REPLAYS_ROOT / f"concat_{clip_id}.txt"
+    temp_joined = REPLAYS_ROOT / f"joined_{clip_id}.mp4"
+    output_clip = REPLAYS_ROOT / f"replay_{clip_id}.mp4"
+
+    build_concat_file(segments, concat_path)
+
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+             "-i", str(concat_path), "-c", "copy", str(temp_joined)],
+            check=True, capture_output=True, text=True
+        )
+
+        total_duration = ffprobe_duration(temp_joined)
+        start_time = max(0, total_duration - seconds)
+
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(start_time), "-i", str(temp_joined),
+             "-t", str(seconds), "-c:v", "libx264", "-preset", "veryfast",
+             "-c:a", "aac", str(output_clip)],
+            check=True, capture_output=True, text=True
+        )
+
+        conn.execute(
+            "INSERT INTO events (session_id, event_type, ts, meta) VALUES (?, ?, ?, ?)",
+            (req.session_id, "clip_created", time.time(), json.dumps({
+                "field_id": req.field_id, "camera_id": camera_id,
+                "seconds": seconds, "clip_file": output_clip.name
+            }))
+        )
+        conn.commit()
+
+        _clip_jobs[job_id] = {
+            "status": "done",
+            "clip_url": f"http://{MEDIA_HOST}:8000/replays/{output_clip.name}",
+            "clip_file": output_clip.name,
+        }
+
+    except subprocess.CalledProcessError as e:
+        _clip_jobs[job_id] = {
+            "status": "error",
+            "error": e.stderr[-2000:] if e.stderr else "ffmpeg failed",
+        }
+    finally:
+        for p in [concat_path, temp_joined]:
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+
+
 @app.post("/api/clip")
 def create_clip(req: ClipRequest):
     camera_id = req.camera_id
@@ -184,87 +244,16 @@ def create_clip(req: ClipRequest):
     if not segments:
         raise HTTPException(status_code=404, detail="no recording segments found yet")
 
-    clip_id = uuid.uuid4().hex[:10]
-    concat_path = REPLAYS_ROOT / f"concat_{clip_id}.txt"
-    temp_joined = REPLAYS_ROOT / f"joined_{clip_id}.mp4"
-    output_clip = REPLAYS_ROOT / f"replay_{clip_id}.mp4"
+    job_id = uuid.uuid4().hex[:10]
+    _clip_jobs[job_id] = {"status": "pending"}
+    _clip_executor.submit(_run_clip_job, job_id, req, seconds, list(segments))
 
-    build_concat_file(segments, concat_path)
+    return {"job_id": job_id, "status": "pending"}
 
-    try:
-        # join recent segments
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", str(concat_path),
-                "-c", "copy",
-                str(temp_joined)
-            ],
-            check=True,
-            capture_output=True,
-            text=True
-        )
 
-        total_duration = ffprobe_duration(temp_joined)
-        start_time = max(0, total_duration - seconds)
-
-        # trim exact last N seconds
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-ss", str(start_time),
-                "-i", str(temp_joined),
-                "-t", str(seconds),
-                "-c:v", "libx264",
-                "-preset", "veryfast",
-                "-c:a", "aac",
-                str(output_clip)
-            ],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-
-        conn.execute(
-            "INSERT INTO events (session_id, event_type, ts, meta) VALUES (?, ?, ?, ?)",
-            (
-                req.session_id,
-                "clip_created",
-                time.time(),
-                json.dumps({
-                    "field_id": req.field_id,
-                    "camera_id": camera_id,
-                    "seconds": seconds,
-                    "clip_file": output_clip.name
-                })
-            )
-        )
-        conn.commit()
-
-        return {
-            "ok": True,
-            "camera_id": camera_id,
-            "seconds": seconds,
-            "clip_url": f"http://{MEDIA_HOST}:8000/replays/{output_clip.name}",
-            "clip_file": output_clip.name
-        }
-
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "ffmpeg failed while building clip",
-                "stderr": e.stderr[-2000:] if e.stderr else ""
-            }
-        )
-    finally:
-        for p in [concat_path, temp_joined]:
-            try:
-                if p.exists():
-                    p.unlink()
-            except Exception:
-                pass
+@app.get("/api/clip/{job_id}")
+def get_clip_status(job_id: str):
+    job = _clip_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    return {"job_id": job_id, **job}

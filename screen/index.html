@@ -131,6 +131,33 @@
         font-size: 13px;
         color: #b8c0cc;
       }
+
+      .row-label {
+        font-size: 13px;
+        color: #b8c0cc;
+        white-space: nowrap;
+      }
+
+      button.active-dur {
+        outline: 2px solid #7fb3ff;
+        background: #31405d;
+      }
+
+      #qr-section {
+        display: none;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        background: #1c212b;
+        border-radius: 12px;
+      }
+
+      #qr-url {
+        font-size: 11px;
+        color: #b8c0cc;
+        word-break: break-all;
+        max-width: 240px;
+      }
     </style>
   </head>
   <body>
@@ -171,6 +198,14 @@
         </div>
 
         <div class="row">
+          <span class="row-label">Clip duration:</span>
+          <button class="dur-btn" data-dur="5">5s</button>
+          <button class="dur-btn active-dur" data-dur="10">10s</button>
+          <button class="dur-btn" data-dur="15">15s</button>
+          <button class="dur-btn" data-dur="30">30s</button>
+        </div>
+
+        <div class="row">
           <button class="cam-btn active-cam" data-cam="court1_camA">
             Cam A
           </button>
@@ -180,10 +215,19 @@
         </div>
 
         <div class="status" id="status">Starting…</div>
+
+        <div id="qr-section">
+          <canvas id="qr-canvas"></canvas>
+          <div>
+            <div class="status">Scan to watch on phone:</div>
+            <div id="qr-url"></div>
+          </div>
+        </div>
       </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
