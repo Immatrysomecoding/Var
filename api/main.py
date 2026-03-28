@@ -64,8 +64,14 @@ def _cleanup_loop():
 
 threading.Thread(target=_cleanup_loop, daemon=True).start()
 
-_clip_jobs: dict = {}
+_clip_jobs: dict = {}  # job_id -> {status, ts, ...}
 _clip_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
+def _prune_clip_jobs():
+    cutoff = time.time() - 600  # keep jobs for 10 minutes
+    stale = [jid for jid, job in list(_clip_jobs.items()) if job.get("ts", 0) < cutoff]
+    for jid in stale:
+        _clip_jobs.pop(jid, None)
 
 app = FastAPI(title="VAR Basic API")
 app.mount("/replays", StaticFiles(directory=str(REPLAYS_ROOT)), name="replays")
@@ -180,7 +186,7 @@ def ffprobe_duration(file_path: Path) -> float:
     return float(result.stdout.strip())
 
 def _run_clip_job(job_id: str, req: "ClipRequest", seconds: int, segments: list):
-    _clip_jobs[job_id] = {"status": "running"}
+    _clip_jobs[job_id] = {"status": "running", "ts": time.time()}
     camera_id = req.camera_id
     clip_id = uuid.uuid4().hex[:10]
     concat_path = REPLAYS_ROOT / f"concat_{clip_id}.txt"
@@ -217,6 +223,7 @@ def _run_clip_job(job_id: str, req: "ClipRequest", seconds: int, segments: list)
 
         _clip_jobs[job_id] = {
             "status": "done",
+            "ts": time.time(),
             "clip_url": f"http://{MEDIA_HOST}:8000/replays/{output_clip.name}",
             "clip_file": output_clip.name,
         }
@@ -224,6 +231,7 @@ def _run_clip_job(job_id: str, req: "ClipRequest", seconds: int, segments: list)
     except subprocess.CalledProcessError as e:
         _clip_jobs[job_id] = {
             "status": "error",
+            "ts": time.time(),
             "error": e.stderr[-2000:] if e.stderr else "ffmpeg failed",
         }
     finally:
@@ -244,8 +252,9 @@ def create_clip(req: ClipRequest):
     if not segments:
         raise HTTPException(status_code=404, detail="no recording segments found yet")
 
+    _prune_clip_jobs()
     job_id = uuid.uuid4().hex[:10]
-    _clip_jobs[job_id] = {"status": "pending"}
+    _clip_jobs[job_id] = {"status": "pending", "ts": time.time()}
     _clip_executor.submit(_run_clip_job, job_id, req, seconds, list(segments))
 
     return {"job_id": job_id, "status": "pending"}

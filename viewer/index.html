@@ -108,41 +108,55 @@
           titleEl.textContent = `Watching ${data.field_id}`;
           metaEl.textContent = `Stream path: ${data.stream_path}`;
 
-          const hlsUrl = data.stream_url_hls;
+          // Build HLS URL client-side so it works on phones (avoids MEDIA_HOST=localhost from API)
+          const hlsUrl = `http://${window.location.hostname}:8888/${data.stream_path}/index.m3u8`;
 
-          if (Hls.isSupported()) {
-            const hls = new Hls({
-              lowLatencyMode: false,
-            });
+          let reconnectTimer = null;
 
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
+          function startHls() {
+            if (reconnectTimer) {
+              clearTimeout(reconnectTimer);
+              reconnectTimer = null;
+            }
 
-            hls.on(Hls.Events.MANIFEST_PARSED, async function () {
-              try {
-                await video.play();
-                statusEl.textContent = "Live stream playing";
-              } catch (e) {
-                statusEl.textContent = "Tap play to start stream";
-              }
-            });
+            if (Hls.isSupported()) {
+              const hls = new Hls({ lowLatencyMode: false });
 
-            hls.on(Hls.Events.ERROR, function (_, eventData) {
-              console.error("HLS error", eventData);
-              statusEl.textContent = "Playback error";
-            });
-          } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-            video.src = hlsUrl;
-            video.addEventListener("loadedmetadata", async () => {
-              try {
-                await video.play();
-              } catch (e) {
-                statusEl.textContent = "Tap play to start stream";
-              }
-            });
-          } else {
-            throw new Error("This browser does not support HLS");
+              hls.loadSource(hlsUrl);
+              hls.attachMedia(video);
+
+              hls.on(Hls.Events.MANIFEST_PARSED, async function () {
+                try {
+                  await video.play();
+                  statusEl.textContent = "Live stream playing";
+                } catch (e) {
+                  statusEl.textContent = "Tap play to start stream";
+                }
+              });
+
+              hls.on(Hls.Events.ERROR, function (_, eventData) {
+                console.error("HLS error", eventData);
+                if (eventData.fatal) {
+                  hls.destroy();
+                  statusEl.textContent = "Stream lost. Reconnecting in 5s...";
+                  reconnectTimer = setTimeout(startHls, 5000);
+                }
+              });
+            } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+              video.src = hlsUrl;
+              video.addEventListener("loadedmetadata", async () => {
+                try {
+                  await video.play();
+                } catch (e) {
+                  statusEl.textContent = "Tap play to start stream";
+                }
+              });
+            } else {
+              throw new Error("This browser does not support HLS");
+            }
           }
+
+          startHls();
 
           await postEvent(sessionId, "open", {
             userAgent: navigator.userAgent,
