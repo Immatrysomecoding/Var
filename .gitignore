@@ -5,3 +5,5 @@ credentials.json
 package-lock.json
 package.json
 node_modules/
+tests/__pycache__/
+api/__pycache__/

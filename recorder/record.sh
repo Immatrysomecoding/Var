@@ -1,11 +1,9 @@
 #!/bin/sh
 set -eu
 
+VENUE_ID="${VENUE_ID:-playground-hcm-01}"
+FIELD_ID="${FIELD_ID:-court-1}"
 CAMERAS="court1_camA court1_camB court1_camC court1_camD"
-
-for cam in $CAMERAS; do
-    mkdir -p "/data/recordings/$cam"
-done
 
 echo "[recorder] waiting for mediamtx..."
 sleep 5
@@ -13,7 +11,10 @@ sleep 5
 record_camera() {
     cam="$1"
     while true; do
-        echo "[recorder] starting $cam"
+        date_dir=$(date +"%Y-%m-%d")
+        out_dir="/data/recordings/$VENUE_ID/$FIELD_ID/$cam/$date_dir"
+        mkdir -p "$out_dir"
+        echo "[recorder] starting $cam -> $out_dir"
         ffmpeg \
             -rtsp_transport tcp \
             -reconnect 1 \
@@ -25,7 +26,7 @@ record_camera() {
             -segment_time 5 \
             -reset_timestamps 1 \
             -strftime 1 \
-            "/data/recordings/$cam/%Y-%m-%d_%H-%M-%S.mp4" || true
+            "$out_dir/%H-%M-%S.mp4" || true
         echo "[recorder] $cam dropped, retrying in 3s..."
         sleep 3
     done

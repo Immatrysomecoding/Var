@@ -30,10 +30,13 @@ services:
       - "8000:8000"
     environment:
       - MEDIA_HOST=localhost #change localhost to test/ ip to connect through phone/ webdomain when deployed
+      - VENUE_ID=playground-hcm-01
+      - FIELD_ID=court-1
+      - DEFAULT_CAMERAS=court1_camA,court1_camB,court1_camC,court1_camD
     volumes:
       - ./data/meta:/data/meta
       - ./data/recordings:/data/recordings:ro
-      - ./data/replays:/data/replays
+      - ./data/clips:/data/clips
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
@@ -94,6 +97,9 @@ services:
     container_name: var_recorder
     depends_on:
       - mediamtx
+    environment:
+      - VENUE_ID=playground-hcm-01
+      - FIELD_ID=court-1
     volumes:
       - ./recorder:/recorder:ro
       - ./data/recordings:/data/recordings

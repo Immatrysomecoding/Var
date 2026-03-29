@@ -46,6 +46,20 @@
 
 ---
 
+## Phase 2.5 — Cleanup & Foundation ✅ COMPLETE
+
+**Goal:** Prepare codebase for multi-court (Phase 3) and AI training data (Phase 4).
+
+- [x] **DB schema expanded** — added `clips`, `cameras`, `venues` tables + 4 indexes on `clips`
+- [x] **Clip path restructured** — `/data/clips/{session_id}/{clip_id}.mp4` + sidecar JSON
+- [x] **Recording path restructured** — `/data/recordings/{venue_id}/{field_id}/{cameraId}/{YYYY-MM-DD}/{HH-MM-SS}.mp4`
+- [x] **API split into routers** — `config.py`, `database.py`, `models.py`, `routers/{sessions,events,clips}.py`
+- [x] **Config wired via env vars** — `VENUE_ID`, `FIELD_ID`, `DEFAULT_CAMERAS`, `CLIPS_ROOT`, `RECORDINGS_ROOT` all configurable
+- [x] **SQLite concurrency fixed** — `threading.Lock()` on all writes in `database.py`
+- [x] **Integration tests** — 7 tests in `tests/test_api.py`, all passing via httpx `ASGITransport`
+
+---
+
 ## Phase 3 — Platform
 
 **Goal:** Multi-court, multi-venue, production-deployable.
