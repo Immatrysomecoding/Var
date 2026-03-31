@@ -18,12 +18,27 @@
       }
       h1 {
         font-size: 20px;
-        margin-bottom: 8px;
+        margin: 0 0 4px 0;
       }
       .meta {
-        font-size: 14px;
-        opacity: 0.8;
+        font-size: 13px;
+        opacity: 0.7;
         margin-bottom: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+      }
+      .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .viewer-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #22c55e;
       }
       video {
         width: 100%;
@@ -36,20 +51,55 @@
         font-size: 14px;
         opacity: 0.9;
       }
+
+      /* ── Clip list ─────────────────────────────────────────────────────── */
+
+      #clip-section {
+        margin-top: 20px;
+      }
+      #clip-section h2 {
+        font-size: 16px;
+        margin: 0 0 10px 0;
+        opacity: 0.8;
+      }
+      #clip-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .clip-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        background: #1c212b;
+        border-radius: 10px;
+        font-size: 14px;
+      }
+      .clip-item a {
+        color: #7fb3ff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .clip-item a:hover {
+        text-decoration: underline;
+      }
+      .clip-meta {
+        opacity: 0.6;
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
     <div class="wrap">
       <h1 id="title">Connecting...</h1>
       <div class="meta" id="meta"></div>
-      <video
-        id="player"
-        controls
-        autoplay
-        playsinline
-        webkit-playsinline
-      ></video>
+      <video id="player" controls autoplay playsinline webkit-playsinline></video>
       <div class="status" id="status"></div>
+      <div id="clip-section" style="display:none">
+        <h2>Session Clips</h2>
+        <div id="clip-list"></div>
+      </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -58,17 +108,10 @@
 
       function getSessionId() {
         const url = new URL(window.location.href);
-
         const queryId = url.searchParams.get("id");
         if (queryId) return queryId;
-
         const parts = url.pathname.split("/").filter(Boolean);
-
-        // supports /f/<sessionId>
-        if (parts.length >= 2 && parts[0] === "f") {
-          return parts[1];
-        }
-
+        if (parts.length >= 2 && parts[0] === "f") return parts[1];
         return null;
       }
 
@@ -79,9 +122,51 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ session_id: sessionId, event, meta }),
           });
-        } catch (err) {
-          console.warn("event log failed", err);
-        }
+        } catch { /* non-fatal */ }
+      }
+
+      async function joinSession(sessionId) {
+        try {
+          const res = await fetch(`${API_BASE}/session/${sessionId}/join`, { method: "POST" });
+          if (res.ok) {
+            const data = await res.json();
+            return data.viewer_count;
+          }
+        } catch { /* non-fatal */ }
+        return null;
+      }
+
+      async function leaveSession(sessionId) {
+        try {
+          await fetch(`${API_BASE}/session/${sessionId}/leave`, { method: "POST" });
+        } catch { /* non-fatal */ }
+      }
+
+      async function loadClips(sessionId) {
+        try {
+          const res = await fetch(`${API_BASE}/clips?session_id=${sessionId}&limit=20`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const clips = data.clips || [];
+          if (clips.length === 0) return;
+
+          const section = document.getElementById("clip-section");
+          const list = document.getElementById("clip-list");
+          section.style.display = "";
+          list.innerHTML = "";
+
+          for (const clip of clips) {
+            const item = document.createElement("div");
+            item.className = "clip-item";
+            const date = new Date(clip.created_at * 1000).toLocaleTimeString();
+            item.innerHTML = `
+              <a href="${clip.clip_url}" target="_blank">▶ Clip ${clip.clip_id.slice(0, 6)}</a>
+              <span class="clip-meta">${clip.duration_sec}s · ${clip.camera_id} · ${date}</span>
+              ${clip.label ? `<span class="clip-meta">🏷 ${clip.label}</span>` : ""}
+            `;
+            list.appendChild(item);
+          }
+        } catch { /* non-fatal */ }
       }
 
       async function start() {
@@ -99,43 +184,52 @@
 
         try {
           const res = await fetch(`${API_BASE}/session/${sessionId}`);
-          if (!res.ok) {
-            throw new Error(`Session not found (${res.status})`);
-          }
+          if (!res.ok) throw new Error(`Session not found (${res.status})`);
 
           const data = await res.json();
 
-          titleEl.textContent = `Watching ${data.field_id}`;
-          metaEl.textContent = `Stream path: ${data.stream_path}`;
+          titleEl.textContent = data.venue_name
+            ? `${data.venue_name} — ${data.field_name || data.field_id}`
+            : `Watching ${data.field_id}`;
 
-          // Build HLS URL client-side so it works on phones (avoids MEDIA_HOST=localhost from API)
+          // Join viewer counter
+          const viewerCount = await joinSession(sessionId);
+
+          // Build meta row
+          const metaParts = [];
+          if (data.field_name) {
+            metaParts.push(`<span class="meta-item">📍 ${data.field_name}</span>`);
+          }
+          if (viewerCount !== null) {
+            metaParts.push(`
+              <span class="meta-item" id="viewer-count-el">
+                <span class="viewer-dot"></span>
+                <span id="viewer-count">${viewerCount}</span> watching
+              </span>`);
+          }
+          metaEl.innerHTML = metaParts.join("");
+
+          // Build HLS URL client-side so it works on phones
           const hlsUrl = `http://${window.location.hostname}:8888/${data.stream_path}/index.m3u8`;
 
           let reconnectTimer = null;
 
           function startHls() {
-            if (reconnectTimer) {
-              clearTimeout(reconnectTimer);
-              reconnectTimer = null;
-            }
+            if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
             if (Hls.isSupported()) {
               const hls = new Hls({ lowLatencyMode: false });
-
               hls.loadSource(hlsUrl);
               hls.attachMedia(video);
-
-              hls.on(Hls.Events.MANIFEST_PARSED, async function () {
+              hls.on(Hls.Events.MANIFEST_PARSED, async () => {
                 try {
                   await video.play();
                   statusEl.textContent = "Live stream playing";
-                } catch (e) {
+                } catch {
                   statusEl.textContent = "Tap play to start stream";
                 }
               });
-
-              hls.on(Hls.Events.ERROR, function (_, eventData) {
-                console.error("HLS error", eventData);
+              hls.on(Hls.Events.ERROR, (_, eventData) => {
                 if (eventData.fatal) {
                   hls.destroy();
                   statusEl.textContent = "Stream lost. Reconnecting in 5s...";
@@ -145,11 +239,7 @@
             } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
               video.src = hlsUrl;
               video.addEventListener("loadedmetadata", async () => {
-                try {
-                  await video.play();
-                } catch (e) {
-                  statusEl.textContent = "Tap play to start stream";
-                }
+                try { await video.play(); } catch { statusEl.textContent = "Tap play to start"; }
               });
             } else {
               throw new Error("This browser does not support HLS");
@@ -158,21 +248,17 @@
 
           startHls();
 
-          await postEvent(sessionId, "open", {
-            userAgent: navigator.userAgent,
-          });
+          // Load session clips
+          await loadClips(sessionId);
+
+          await postEvent(sessionId, "open", { userAgent: navigator.userAgent });
 
           window.addEventListener("beforeunload", () => {
+            leaveSession(sessionId);
             navigator.sendBeacon(
               `${API_BASE}/event`,
               new Blob(
-                [
-                  JSON.stringify({
-                    session_id: sessionId,
-                    event: "close",
-                    meta: {},
-                  }),
-                ],
+                [JSON.stringify({ session_id: sessionId, event: "close", meta: {} })],
                 { type: "application/json" },
               ),
             );

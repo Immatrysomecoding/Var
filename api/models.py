@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class SessionCreateRequest(BaseModel):
@@ -9,6 +10,7 @@ class SessionCreateRequest(BaseModel):
 class EventRequest(BaseModel):
     session_id: str
     event: str
+    camera_id: Optional[str] = None
     meta: dict = {}
 
 
@@ -17,3 +19,7 @@ class ClipRequest(BaseModel):
     camera_id: str
     seconds: int = 10
     session_id: str = "screen-local"
+
+
+class PinVerifyRequest(BaseModel):
+    pin: str

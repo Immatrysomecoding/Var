@@ -3,8 +3,32 @@ set -eu
 
 VENUE_ID="${VENUE_ID:-playground-hcm-01}"
 FIELD_ID="${FIELD_ID:-court-1}"
-CAMERAS="court1_camA court1_camB court1_camC court1_camD"
 
+# ── Camera list from values.yml (preferred) or env var fallback ───────────────
+#
+# values.yml format:
+#   fields:
+#     - fieldId: "court-1"
+#       cameras:
+#         - cameraId: "court1_camA"
+#
+# We grep for lines containing 'cameraId:' and extract the quoted value.
+# This is fragile only if the YAML indentation changes dramatically; for this
+# project the structure is fixed so grep/sed is reliable.
+
+CAMERAS=""
+if [ -f /values.yml ]; then
+    CAMERAS=$(grep -E 'cameraId:' /values.yml \
+        | sed 's/.*cameraId:[[:space:]]*"\([^"]*\)".*/\1/' \
+        | tr '\n' ' ' \
+        | sed 's/[[:space:]]*$//')
+fi
+
+if [ -z "$CAMERAS" ]; then
+    CAMERAS="${DEFAULT_CAMERAS:-court1_camA court1_camB court1_camC court1_camD}"
+fi
+
+echo "[recorder] cameras: $CAMERAS"
 echo "[recorder] waiting for mediamtx..."
 sleep 5
 

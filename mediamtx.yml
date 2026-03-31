@@ -6,8 +6,10 @@ hlsSegmentDuration: 2s
 hlsPartDuration: 200ms
 hlsSegmentCount: 30
 
+# API for health/status checks (used by /api/health/detailed and camera status)
+api: yes
+apiAddress: :9997
+
+# Wildcard path — accepts any camera stream without pre-registration
 paths:
-  court1_camA: {}
-  court1_camB: {}
-  court1_camC: {}
-  court1_camD: {}
+  "~.*": {}

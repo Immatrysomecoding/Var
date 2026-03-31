@@ -8,6 +8,7 @@ services:
       - "8889:8889"
       - "1935:1935"
       - "8189:8189/udp"
+      - "9997:9997"
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
     restart: unless-stopped
@@ -28,15 +29,23 @@ services:
     container_name: var_api
     ports:
       - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - MEDIA_HOST=localhost #change localhost to test/ ip to connect through phone/ webdomain when deployed
-      - VENUE_ID=playground-hcm-01
-      - FIELD_ID=court-1
-      - DEFAULT_CAMERAS=court1_camA,court1_camB,court1_camC,court1_camD
+      - MEDIA_HOST=${MEDIA_HOST:-localhost}
+      - VENUE_ID=${VENUE_ID:-playground-hcm-01}
+      - FIELD_ID=${FIELD_ID:-court-1}
+      - RECORDING_TTL_HOURS=${RECORDING_TTL_HOURS:-2}
+      - VALUES_PATH=/values.yml
+      - MEDIAMTX_API_URL=http://mediamtx:9997
     volumes:
       - ./data/meta:/data/meta
       - ./data/recordings:/data/recordings:ro
       - ./data/clips:/data/clips
+      - ./values.yml:/values.yml:ro
+    depends_on:
+      - mediamtx
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
@@ -97,12 +106,17 @@ services:
     container_name: var_recorder
     depends_on:
       - mediamtx
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - VENUE_ID=playground-hcm-01
-      - FIELD_ID=court-1
+      - VENUE_ID=${VENUE_ID:-playground-hcm-01}
+      - FIELD_ID=${FIELD_ID:-court-1}
+      - DEFAULT_CAMERAS=${DEFAULT_CAMERAS:-court1_camA court1_camB court1_camC court1_camD}
     volumes:
       - ./recorder:/recorder:ro
       - ./data/recordings:/data/recordings
+      - ./values.yml:/values.yml:ro
     entrypoint: ["/bin/sh", "/recorder/record.sh"]
     restart: unless-stopped
     healthcheck:

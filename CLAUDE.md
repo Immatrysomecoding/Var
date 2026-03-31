@@ -15,98 +15,92 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 
 ---
 
-## Current State (as of 2026-03-29)
+## Current State (as of 2026-03-30)
 
 ### What Works
 
-- RTSP ingest via MediaMTX
-- HLS playback in browser (8–10s latency)
+- RTSP ingest via MediaMTX (wildcard paths — any camera stream accepted)
+- HLS playback in browser (<3s latency with LL-HLS)
 - DVR-style 60s replay window on courtside screen
-- Camera switching UI (4 buttons)
+- **Dynamic camera buttons** loaded from API (not hardcoded HTML)
+- **Multi-court field selector** — switch between courts, cameras reload per court
+- **PIN lock** on courtside screen (set `access.screen_pin` in values.yml)
 - Clip generation via API (FFmpeg concat + trim), async with job polling
-- Clip metadata sidecar JSON written beside every clip
-- Event logging to SQLite
-- Public viewer via `/f/{sessionId}`
+- Clip metadata stored in DB + sidecar JSON
+- Event logging to SQLite with camera_id
+- Public viewer via `/f/{sessionId}` showing venue name, field name, viewer count, clip list
 - Fake camera dev mode (looped MP4)
-- All config driven by env vars (VENUE_ID, FIELD_ID, MEDIA_HOST, etc.)
+- **All config driven by values.yml** (venue, fields, cameras, PIN)
+- **Structured JSON logging** to stdout
+- **Disk space warning** if `/data` < 5 GB free
 
 ### What Is Broken / Incomplete
 
-| #   | Issue                                                               | Severity     | Status     | File                                 |
-| --- | ------------------------------------------------------------------- | ------------ | ---------- | ------------------------------------ |
-| 1   | `/data/recordings` not mounted in API container — clips will fail   | **CRITICAL** | ✅ Fixed   | `docker-compose.yml`                 |
-| 2   | `MEDIA_HOST=localhost` hardcoded — phones/remote access broken      | **CRITICAL** | ✅ Fixed   | `screen/app.js`, `viewer/index.html` |
-| 3   | Only `court1_camA` is actually recorded — other 3 cameras empty     | **HIGH**     | ✅ Fixed   | `recorder/record.sh`                 |
-| 4   | Event log for clip uses hardcoded `"screen-local"` not real session | **HIGH**     | ✅ Fixed   | `api/routers/clips.py`               |
-| 5   | `values.yml` config is not read by any service — all hardcoded      | **HIGH**     | ✅ Fixed   | `api/config.py`                      |
-| 6   | No reconnect logic if RTSP stream drops                             | **HIGH**     | ✅ Fixed   | `recorder/record.sh`                 |
-| 7   | Recordings grow forever, no cleanup                                 | **MEDIUM**   | ✅ Fixed   | `api/database.py`                    |
-| 8   | No DB indexes on events table — will slow as data grows             | **MEDIUM**   | ✅ Fixed   | `api/database.py`                    |
-| 9   | DVR window: no "seconds behind live" indicator                      | **MEDIUM**   | ✅ Fixed   | `screen/app.js`                      |
-| 10  | Clip duration always 10s — not user-adjustable                      | **LOW**      | ✅ Fixed   | `screen/app.js`                      |
-| 11  | No retry/error recovery in viewer if HLS stalls                     | **LOW**      | ✅ Fixed   | `viewer/index.html`                  |
-| 12  | HLS latency 8–10s — target is <3s                                   | **FUTURE**   | ✅ Fixed   | `mediamtx.yml`                       |
+| #   | Issue                                               | Severity   | Status | File          |
+| --- | --------------------------------------------------- | ---------- | ------ | ------------- |
+| 1   | Fake camera pushes `court1_camA` — only cam A works | **MEDIUM** | Known  | `fake-camera.yml` |
+| 2   | Viewer counter resets on API restart (in-memory)    | **LOW**    | By design |            |
 
 ---
 
 ## Roadmap
 
-### Phase 1 — Stabilize (Fix What's Broken) ✅ COMPLETE
-
-**Goal:** System works reliably, accessible from phone on local network.
-
-- [x] **Fix API volume** — mounted `./data/recordings:/data/recordings:ro` and `./data/clips:/data/clips` in `docker-compose.yml`
-- [x] **Fix remote access** — `MEDIA_HOST` now uses `window.location.hostname` in `screen/app.js` and `viewer/index.html`; API URLs auto-resolve from browser
-- [x] **Fix session ID in clip event log** — `session_id` field added to `ClipRequest`, passed through to event INSERT
-- [x] **Multi-camera recorder** — `record.sh` now spawns parallel ffmpeg processes for all 4 cameras
-- [x] **Recorder reconnect** — infinite retry loop + `-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5` flags
-- [x] **Add DB indexes** — `CREATE INDEX IF NOT EXISTS` on `events(session_id)` and `events(ts)`
-- [x] **Recording cleanup** — background thread deletes segments older than `RECORDING_TTL_HOURS` (default 2h) every 30 min
+### Phase 1 — Stabilize ✅ COMPLETE
 
 ### Phase 2 — Production Quality ✅ COMPLETE
 
-- [x] Enable LL-HLS in MediaMTX + tune HLS.js for <3s latency
-- [x] "Seconds behind live" display (`screen/app.js`)
-- [x] Clip duration selector (5s / 10s / 15s / 30s)
-- [x] Clip preview (opens in new tab on ready)
-- [x] Replay speed control — skipped, not needed for VAR use case
-- [x] Auto-refresh on stream loss (`screen/app.js` + `viewer/index.html`)
-- [x] QR code on screen for spectator URL
-- [x] Health checks + resource limits in docker-compose
-- [x] Async clip generation (background task + job ID)
-
 ### Phase 2.5 — Cleanup & Foundation ✅ COMPLETE
 
-**Goal:** Prepare codebase for multi-court (Phase 3) and AI training data (Phase 4).
+### Phase 3 — Platform ✅ COMPLETE
 
-- [x] **DB schema expanded** — added `clips`, `cameras`, `venues` tables + 4 indexes on `clips`
-- [x] **Clip path restructured** — output is now `/data/clips/{session_id}/{clip_id}.mp4`; sidecar JSON at `/data/clips/{session_id}/{clip_id}.json`
-- [x] **Recording path restructured** — segments now at `/data/recordings/{venue_id}/{field_id}/{cameraId}/{YYYY-MM-DD}/{HH-MM-SS}.mp4`
-- [x] **API split into routers** — `api/config.py`, `api/database.py`, `api/models.py`, `api/routers/{sessions,events,clips}.py`, slim `api/main.py`
-- [x] **Config wired via env vars** — `VENUE_ID`, `FIELD_ID`, `MEDIA_HOST`, `RECORDINGS_ROOT`, `CLIPS_ROOT`, `RECORDING_TTL_HOURS`, `DEFAULT_CAMERAS` all in `api/config.py`
-- [x] **SQLite concurrency fixed** — `threading.Lock()` on all write operations in `database.py`; reads are lock-free
-- [x] **Integration tests** — `tests/conftest.py` + `tests/test_api.py`, 7 tests covering every endpoint, all passing
+**Goal:** Multi-court, multi-venue, production-deployable.
+
+- [x] **values.yml is now the config source of truth** — venue name, field list, camera list, PIN all come from values.yml; env vars override at deploy time
+- [x] **mediamtx wildcard path** — `~.*: {}` accepts any camera stream without pre-registration
+- [x] **recorder reads cameras from values.yml** — grep/sed parser in record.sh; falls back to DEFAULT_CAMERAS env var
+- [x] **DB migrations** — `fields` table added; `sessions.venue_id`, `events.camera_id`, `cameras.position` added via ALTER TABLE; all existing data preserved
+- [x] **venues/fields/cameras seeded from values.yml** on every API startup (upsert, idempotent)
+- [x] **GET /api/config** — full venue + field + camera config, pin_required flag
+- [x] **GET /api/fields** + **GET /api/fields/{id}** — field + camera list with live streaming status
+- [x] **GET /api/cameras/{id}/status** — checks mediamtx API at :9997
+- [x] **POST /api/config/verify-pin** — client-side PIN validation
+- [x] **GET /api/health/detailed** — mediamtx, cameras, db, disk_free_gb
+- [x] **GET /api/clips** — filter by session_id and/or field_id
+- [x] **GET /api/session/{id}** — now includes venue_name, field_name, viewer_count
+- [x] **POST /api/session/{id}/join** + **/leave** — viewer counter
+- [x] **Screen UI dynamic cameras** — buttons loaded from /api/config at startup, offline cameras greyed out
+- [x] **Screen UI field selector** — dropdown shown when >1 field; switching reloads cameras + creates new session
+- [x] **Screen PIN lock** — overlay shown if `access.screen_pin` set in values.yml; PIN stored in sessionStorage
+- [x] **Viewer improvements** — shows venue + field name, viewer count, session clip list
+- [x] **Structured JSON logging** — Python logging with JSON formatter on all API output
+- [x] **Disk space warning** — logs warning every 30 min if /data < 5 GB free
+- [x] **17 integration tests** — all passing, cover all new endpoints
+- [x] **tests/smoke_test.sh** — hits every endpoint, prints PASS/FAIL
 
 ---
 
 ## Architecture (Current)
 
 ```
+values.yml  ──→  api/config.py  ──→  DB seed (venues/fields/cameras)
+                                 └──→  GET /api/config|fields|cameras
+                                 └──→  PIN check (screen)
+
 RTSP cameras / fake-camera FFmpeg
         ↓
-   MediaMTX (port 8554 RTSP in, 8888 HLS out)
-    segments: 2s, buffer: 30 segments = 60s DVR
+   MediaMTX (port 8554 RTSP in, 8888 HLS out, 9997 API)
+   wildcard path ~.*: {} — accepts any stream
         ↓              ↓
    recorder       HLS stream
-   (record.sh)    ↓
-   5-sec .mp4  screen/app.js (HLS.js DVR mode)
-   segments    viewer/index.html
+   (record.sh,    ↓
+   reads cam list screen/app.js  ← loads cameras from /api/config
+   from values.yml) viewer/index.html ← shows venue/field/viewers/clips
         ↓
    /data/recordings/{venue_id}/{field_id}/{cameraId}/{YYYY-MM-DD}/{HH-MM-SS}.mp4
         ↓
    api/routers/clips.py  POST /api/clip
-   → FFmpeg concat N segments → trim → /data/clips/{session_id}/{clip_id}.mp4
-                                       /data/clips/{session_id}/{clip_id}.json  ← sidecar
+   → FFmpeg concat → trim → /data/clips/{session_id}/{clip_id}.mp4
+                          → /data/clips/{session_id}/{clip_id}.json
 ```
 
 **Ports:**
@@ -117,12 +111,17 @@ RTSP cameras / fake-camera FFmpeg
 | 8082 | Screen (courtside) |
 | 8554 | MediaMTX RTSP input |
 | 8888 | MediaMTX HLS output |
+| 9997 | MediaMTX API (internal) |
 
 ---
 
 ## Running the System
 
 ```bash
+# 1. Copy .env.example → .env and set MEDIA_HOST to your LAN IP
+cp .env.example .env
+# Edit .env: MEDIA_HOST=192.168.1.50
+
 # Dev (fake looped camera)
 docker compose -f docker-compose.yml -f fake-camera.yml up --build
 
@@ -131,55 +130,66 @@ docker compose -f docker-compose.yml -f fake-camera.yml down
 
 # Production (real cameras)
 docker compose up --build
+
+# Run integration tests (local Python, no Docker needed)
+python -m pytest tests/ -v
+
+# Smoke test (requires running stack)
+sh tests/smoke_test.sh
 ```
 
 **Test API:**
-
 ```powershell
+Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/config
+Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/fields
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/session `
   -ContentType "application/json" `
-  -Body '{"field_id":"court1","stream_path":"court1_camA"}'
+  -Body '{"field_id":"court-1","stream_path":"court1_camA"}'
 ```
 
 HLS stream: `http://localhost:8888/{cameraId}/index.m3u8`
-
-Run tests: `python -m pytest tests/ -v` from the repo root.
 
 ---
 
 ## Key Files
 
-| File                      | Purpose                                        |
-| ------------------------- | ---------------------------------------------- |
-| `api/main.py`             | App init, middleware, mounts, health endpoint  |
-| `api/config.py`           | All env vars and constants                     |
-| `api/database.py`         | DB connection, schema init, cleanup thread     |
-| `api/models.py`           | Pydantic request models                        |
-| `api/routers/sessions.py` | `/api/session` endpoints                       |
-| `api/routers/events.py`   | `/api/event` endpoint                          |
-| `api/routers/clips.py`    | `/api/clip` endpoints + FFmpeg job runner      |
-| `screen/app.js`           | Courtside UI controller (HLS.js, DVR, clip)    |
-| `screen/index.html`       | Courtside UI layout                            |
-| `viewer/index.html`       | Public viewer (session-based)                  |
-| `recorder/record.sh`      | FFmpeg RTSP → 5s MP4 segments                  |
-| `docker-compose.yml`      | Service orchestration                          |
-| `mediamtx.yml`            | HLS hub config (segment size, buffer)          |
-| `values.yml`              | Future config spec (not yet wired up)          |
-| `fake-camera.yml`         | Dev compose override (loops sample.mp4)        |
-| `tests/conftest.py`       | pytest fixtures (in-process ASGI client)       |
-| `tests/test_api.py`       | Integration tests for all API endpoints        |
+| File                         | Purpose                                               |
+| ---------------------------- | ----------------------------------------------------- |
+| `values.yml`                 | **Master config** — venue, fields, cameras, PIN       |
+| `.env.example`               | Copy to `.env`; set MEDIA_HOST for your network       |
+| `api/main.py`                | App init, lifespan (DB seed), middleware, mounts      |
+| `api/config.py`              | All config: loads values.yml + env var overrides      |
+| `api/database.py`            | DB connection, schema, migrations, cleanup, disk check |
+| `api/models.py`              | Pydantic request models                               |
+| `api/routers/sessions.py`    | `/api/session` CRUD + join/leave viewer counter       |
+| `api/routers/events.py`      | `/api/event` endpoint                                 |
+| `api/routers/clips.py`       | `/api/clip` + `/api/clips` endpoints + FFmpeg runner  |
+| `api/routers/config_api.py`  | `/api/config`, `/api/fields`, `/api/cameras/{id}/status`, `/api/config/verify-pin` |
+| `api/routers/health.py`      | `/api/health` + `/api/health/detailed`                |
+| `screen/app.js`              | Courtside UI — dynamic cameras, field selector, PIN   |
+| `screen/index.html`          | Courtside UI layout                                   |
+| `viewer/index.html`          | Public viewer — venue/field name, viewer count, clips |
+| `recorder/record.sh`         | FFmpeg RTSP → 5s MP4 segments; reads cameras from values.yml |
+| `docker-compose.yml`         | Service orchestration; mounts values.yml; reads .env  |
+| `mediamtx.yml`               | HLS hub config (wildcard path, LL-HLS, API enabled)   |
+| `fake-camera.yml`            | Dev compose override (loops sample.mp4 as court1_camA) |
+| `tests/conftest.py`          | pytest fixtures (temp DB, in-process ASGI client)     |
+| `tests/test_api.py`          | Integration tests (17 tests, all passing)             |
+| `tests/smoke_test.sh`        | End-to-end smoke test (curl-based, stack must be up)  |
 
 ---
 
 ## Known Constraints
 
-- **Latency:** LL-HLS enabled, target <3s. Real-world result depends on network/hardware.
-- **Fake camera:** Timestamp discontinuities at loop boundaries → playback stalls. Real cameras won't have this.
+- **Fake camera:** Only pushes `court1_camA`. Other cameras show as offline in the UI (expected in dev).
+- **Viewer counter:** In-memory dict, resets on API restart.
+- **mediamtx camera status:** Only cameras that are actively streaming appear as online.
 - **Clip generation:** Runs in thread pool (2 workers). Each clip blocks one worker for several seconds.
 - **Windows dev:** Running on Windows 11. Paths in FFmpeg concat file must use forward slashes (handled via `.as_posix()`).
+- **PIN security:** PIN lock is accidental-touch prevention only — not authentication.
 
 ---
 
 ## Docs
 
-Full roadmap: `docs/roadmap.md` | API reference: `docs/api-reference.md` | Services & DB: `docs/services.md` | Workflow: `docs/workflow.md`
+Full roadmap: `docs/roadmap.md` | API reference: `docs/api-reference.md` | Services & DB: `docs/services.md`

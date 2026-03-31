@@ -1,17 +1,20 @@
 import time
 import uuid
 import json
+import logging
 import subprocess
 import concurrent.futures
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
 from config import MEDIA_HOST, RECORDINGS_ROOT, CLIPS_ROOT, VENUE_ID, FIELD_ID
-from database import write_batch
+from database import write_batch, execute
 from models import ClipRequest
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _clip_jobs: dict = {}  # job_id -> {status, ts, ...}
 _clip_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
@@ -24,8 +27,8 @@ def _prune_clip_jobs():
         _clip_jobs.pop(jid, None)
 
 
-def get_latest_segments(camera_id: str, required_seconds: int):
-    camera_dir = RECORDINGS_ROOT / VENUE_ID / FIELD_ID / camera_id
+def get_latest_segments(camera_id: str, required_seconds: int, field_id: str = FIELD_ID):
+    camera_dir = RECORDINGS_ROOT / VENUE_ID / field_id / camera_id
     if not camera_dir.exists():
         return []
     # segments live under date subdirs: camera_dir/YYYY-MM-DD/HH-MM-SS.mp4
@@ -105,14 +108,19 @@ def _run_clip_job(job_id: str, req: ClipRequest, seconds: int, segments: list):
         }
         sidecar_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
 
+        clip_url = f"http://{MEDIA_HOST}:8000/clips/{req.session_id}/{clip_id}.mp4"
+
         write_batch([
             (
-                "INSERT INTO clips (clip_id, session_id, field_id, camera_id, started_at, duration_sec, trigger_event, file_path, label, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (clip_id, req.session_id, req.field_id, camera_id, started_at, seconds, None, str(output_clip), None, None, created_at),
+                "INSERT INTO clips (clip_id, session_id, field_id, camera_id, started_at, "
+                "duration_sec, trigger_event, file_path, label, confidence, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (clip_id, req.session_id, req.field_id, camera_id, started_at,
+                 seconds, None, str(output_clip), None, None, created_at),
             ),
             (
-                "INSERT INTO events (session_id, event_type, ts, meta) VALUES (?, ?, ?, ?)",
-                (req.session_id, "clip_created", created_at, json.dumps({
+                "INSERT INTO events (session_id, event_type, ts, camera_id, meta) VALUES (?, ?, ?, ?, ?)",
+                (req.session_id, "clip_created", created_at, camera_id, json.dumps({
                     "field_id": req.field_id, "camera_id": camera_id,
                     "seconds": seconds, "clip_id": clip_id,
                 })),
@@ -122,15 +130,27 @@ def _run_clip_job(job_id: str, req: ClipRequest, seconds: int, segments: list):
         _clip_jobs[job_id] = {
             "status": "done",
             "ts": created_at,
-            "clip_url": f"http://{MEDIA_HOST}:8000/clips/{req.session_id}/{clip_id}.mp4",
             "clip_id": clip_id,
+            "clip_url": clip_url,
+            "clip_file": f"{clip_id}.mp4",
+            "session_id": req.session_id,
+            "field_id": req.field_id,
+            "camera_id": camera_id,
+            "duration_sec": seconds,
+            "created_at": created_at,
+            "trigger_event": None,
+            "label": None,
+            "confidence": None,
         }
+        logger.info("Clip %s done: %s", clip_id, clip_url)
 
     except subprocess.CalledProcessError as e:
+        err_msg = e.stderr[-2000:] if e.stderr else "ffmpeg failed"
+        logger.error("Clip job %s failed: %s", job_id, err_msg)
         _clip_jobs[job_id] = {
             "status": "error",
             "ts": time.time(),
-            "error": e.stderr[-2000:] if e.stderr else "ffmpeg failed",
+            "error": err_msg,
         }
     finally:
         for p in [concat_path, temp_joined]:
@@ -144,7 +164,7 @@ def _run_clip_job(job_id: str, req: ClipRequest, seconds: int, segments: list):
 @router.post("/api/clip")
 def create_clip(req: ClipRequest):
     seconds = max(5, min(req.seconds, 60))
-    segments = get_latest_segments(req.camera_id, seconds)
+    segments = get_latest_segments(req.camera_id, seconds, req.field_id)
     if not segments:
         raise HTTPException(status_code=404, detail="no recording segments found yet")
 
@@ -161,3 +181,48 @@ def get_clip_status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     return {"job_id": job_id, **job}
+
+
+@router.get("/api/clips")
+def list_clips(session_id: Optional[str] = None, field_id: Optional[str] = None, limit: int = 50):
+    """List clips, optionally filtered by session_id and/or field_id."""
+    if session_id:
+        rows = execute(
+            "SELECT clip_id, session_id, field_id, camera_id, started_at, duration_sec, "
+            "trigger_event, file_path, label, confidence, created_at "
+            "FROM clips WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+    elif field_id:
+        rows = execute(
+            "SELECT clip_id, session_id, field_id, camera_id, started_at, duration_sec, "
+            "trigger_event, file_path, label, confidence, created_at "
+            "FROM clips WHERE field_id = ? ORDER BY created_at DESC LIMIT ?",
+            (field_id, limit),
+        ).fetchall()
+    else:
+        rows = execute(
+            "SELECT clip_id, session_id, field_id, camera_id, started_at, duration_sec, "
+            "trigger_event, file_path, label, confidence, created_at "
+            "FROM clips ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    clips = []
+    for row in rows:
+        clip_id = row[0]
+        sess_id = row[1]
+        clips.append({
+            "clip_id": clip_id,
+            "session_id": sess_id,
+            "field_id": row[2],
+            "camera_id": row[3],
+            "started_at": row[4],
+            "duration_sec": row[5],
+            "trigger_event": row[6],
+            "clip_url": f"http://{MEDIA_HOST}:8000/clips/{sess_id}/{clip_id}.mp4",
+            "label": row[8],
+            "confidence": row[9],
+            "created_at": row[10],
+        })
+    return {"clips": clips}
