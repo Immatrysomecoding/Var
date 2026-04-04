@@ -7,98 +7,288 @@
     <style>
       body {
         margin: 0;
-        font-family: Arial, sans-serif;
-        background: #111;
-        color: #fff;
+        font-family: -apple-system, Arial, sans-serif;
+        background: #f8f7f4;
+        color: #1a1a18;
       }
+
       .wrap {
-        max-width: 960px;
+        max-width: 480px;
         margin: 0 auto;
         padding: 16px;
       }
-      h1 {
-        font-size: 20px;
-        margin: 0 0 4px 0;
+
+      /* ── Header ─────────────────────────────────────────────────────────── */
+
+      .venue-label {
+        font-size: 12px;
+        color: #888780;
+        margin-bottom: 4px;
       }
-      .meta {
-        font-size: 13px;
-        opacity: 0.7;
-        margin-bottom: 12px;
+
+      .session-title {
+        font-size: 18px;
+        font-weight: 500;
+        color: #1a1a18;
+        margin: 0 0 8px 0;
+      }
+
+      .meta-row {
         display: flex;
-        flex-wrap: wrap;
-        gap: 14px;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        min-height: 28px;
       }
-      .meta-item {
+
+      /* ── Viewer count ───────────────────────────────────────────────────── */
+
+      .viewer-count {
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 8px;
+        font-size: 13px;
+        color: #555;
       }
-      .viewer-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
+
+      .dot-wrap {
+        position: relative;
+        width: 10px;
+        height: 10px;
+        flex-shrink: 0;
+      }
+
+      .dot-core {
+        position: absolute;
+        inset: 0;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
         background: #22c55e;
       }
-      video {
-        width: 100%;
-        max-width: 960px;
-        background: #000;
-        border-radius: 12px;
-      }
-      .status {
-        margin-top: 12px;
-        font-size: 14px;
-        opacity: 0.9;
+
+      .dot-ring {
+        position: absolute;
+        inset: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #22c55e;
+        animation: pulse 2s ease-out infinite;
       }
 
-      /* ── Clip list ─────────────────────────────────────────────────────── */
+      @keyframes pulse {
+        0%   { opacity: 0.6; transform: scale(0.8); }
+        100% { opacity: 0;   transform: scale(1.8); }
+      }
+
+      /* ── Share button ───────────────────────────────────────────────────── */
+
+      .share-btn {
+        position: relative;
+        background: #fff;
+        border: 0.5px solid #d3d1c7;
+        border-radius: 99px;
+        padding: 5px 12px;
+        font-size: 12px;
+        color: #1a1a18;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .share-btn:hover { background: #f5f4f1; }
+
+      .share-toast {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        background: #1a1a18;
+        color: #fff;
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      .share-toast.visible { display: block; }
+
+      /* ── Video ──────────────────────────────────────────────────────────── */
+
+      video {
+        width: 100%;
+        background: #000;
+        border-radius: 10px;
+        display: block;
+      }
+
+      .status {
+        margin-top: 10px;
+        font-size: 13px;
+        color: #888780;
+      }
+
+      /* ── Clip section ───────────────────────────────────────────────────── */
 
       #clip-section {
         margin-top: 20px;
       }
+
       #clip-section h2 {
-        font-size: 16px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #888780;
         margin: 0 0 10px 0;
-        opacity: 0.8;
       }
-      #clip-list {
+
+      .clip-scroll {
         display: flex;
-        flex-direction: column;
-        gap: 8px;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: none;
       }
-      .clip-item {
+
+      .clip-scroll::-webkit-scrollbar { display: none; }
+
+      .clip-card {
+        width: 130px;
+        flex-shrink: 0;
+        background: #fff;
+        border: 0.5px solid #e2ddd5;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+      }
+
+      .clip-card:hover { border-color: #c8c4bd; }
+
+      .clip-thumb {
+        height: 72px;
+        background: #1a1a18;
+        border-radius: 8px 8px 0 0;
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 10px 14px;
-        background: #1c212b;
-        border-radius: 10px;
-        font-size: 14px;
+        justify-content: center;
+        position: relative;
       }
-      .clip-item a {
-        color: #7fb3ff;
-        text-decoration: none;
-        font-weight: 600;
-      }
-      .clip-item a:hover {
-        text-decoration: underline;
-      }
-      .clip-meta {
-        opacity: 0.6;
+
+      .clip-play {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
         font-size: 12px;
+      }
+
+      .clip-duration-badge {
+        position: absolute;
+        bottom: 5px;
+        right: 6px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 10px;
+        padding: 2px 5px;
+        border-radius: 4px;
+      }
+
+      .clip-info {
+        padding: 6px 8px;
+      }
+
+      .clip-cam {
+        font-size: 11px;
+        font-weight: 500;
+        color: #1a1a18;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .clip-time {
+        font-size: 10px;
+        color: #888780;
+        margin-top: 1px;
+      }
+
+      /* ── Bottom bar ─────────────────────────────────────────────────────── */
+
+      .bottom-bar {
+        margin-top: 24px;
+        padding-top: 12px;
+        border-top: 0.5px solid #e2ddd5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .bottom-bar-left {
+        font-size: 12px;
+        color: #b5b2ab;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .stream-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #22c55e;
+        flex-shrink: 0;
+      }
+
+      .bottom-bar-right {
+        font-size: 10px;
+        color: #c8c4bd;
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1 id="title">Connecting...</h1>
-      <div class="meta" id="meta"></div>
+      <div class="venue-label" id="venueLabel"></div>
+      <div class="session-title" id="sessionTitle">Connecting...</div>
+
+      <div class="meta-row">
+        <div class="viewer-count" id="viewerCount" style="display:none">
+          <div class="dot-wrap">
+            <div class="dot-core"></div>
+            <div class="dot-ring"></div>
+          </div>
+          <span id="viewerText">Just you</span>
+        </div>
+        <button class="share-btn" id="shareBtn" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          Share
+          <span class="share-toast" id="shareToast">Link copied!</span>
+        </button>
+      </div>
+
       <video id="player" controls autoplay playsinline webkit-playsinline></video>
       <div class="status" id="status"></div>
+
       <div id="clip-section" style="display:none">
         <h2>Session Clips</h2>
-        <div id="clip-list"></div>
+        <div class="clip-scroll" id="clip-list"></div>
+      </div>
+
+      <div class="bottom-bar" id="bottomBar" style="display:none">
+        <div class="bottom-bar-left">
+          <div class="stream-dot"></div>
+          Stream active
+        </div>
+        <div class="bottom-bar-right">VAR Basic</div>
       </div>
     </div>
 
@@ -156,25 +346,46 @@
           list.innerHTML = "";
 
           for (const clip of clips) {
-            const item = document.createElement("div");
-            item.className = "clip-item";
-            const date = new Date(clip.created_at * 1000).toLocaleTimeString();
-            item.innerHTML = `
-              <a href="${clip.clip_url}" target="_blank">▶ Clip ${clip.clip_id.slice(0, 6)}</a>
-              <span class="clip-meta">${clip.duration_sec}s · ${clip.camera_id} · ${date}</span>
-              ${clip.label ? `<span class="clip-meta">🏷 ${clip.label}</span>` : ""}
+            const card = document.createElement("div");
+            card.className = "clip-card";
+            const date = new Date(clip.created_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            card.innerHTML = `
+              <div class="clip-thumb">
+                <div class="clip-play">&#9654;</div>
+                <div class="clip-duration-badge">${clip.duration_sec}s</div>
+              </div>
+              <div class="clip-info">
+                <div class="clip-cam">${clip.camera_id}</div>
+                <div class="clip-time">${date}</div>
+              </div>
             `;
-            list.appendChild(item);
+            card.addEventListener("click", () => window.open(clip.clip_url, "_blank"));
+            list.appendChild(card);
           }
         } catch { /* non-fatal */ }
       }
 
+      async function shareSession(url, title) {
+        if (navigator.share) {
+          await navigator.share({ title, url });
+        } else {
+          await navigator.clipboard.writeText(url);
+          const toast = document.getElementById("shareToast");
+          toast.classList.add("visible");
+          setTimeout(() => toast.classList.remove("visible"), 2000);
+        }
+      }
+
       async function start() {
         const sessionId = getSessionId();
-        const titleEl = document.getElementById("title");
-        const metaEl = document.getElementById("meta");
+        const titleEl = document.getElementById("sessionTitle");
+        const venueLabelEl = document.getElementById("venueLabel");
         const statusEl = document.getElementById("status");
         const video = document.getElementById("player");
+        const viewerCountEl = document.getElementById("viewerCount");
+        const viewerTextEl = document.getElementById("viewerText");
+        const shareBtnEl = document.getElementById("shareBtn");
+        const bottomBar = document.getElementById("bottomBar");
 
         if (!sessionId) {
           titleEl.textContent = "Missing session ID";
@@ -188,30 +399,31 @@
 
           const data = await res.json();
 
-          titleEl.textContent = data.venue_name
-            ? `${data.venue_name} — ${data.field_name || data.field_id}`
-            : `Watching ${data.field_id}`;
+          const fieldLabel = data.field_name || data.field_id;
+          const venueLabel = data.venue_name || "";
+
+          venueLabelEl.textContent = venueLabel ? `${venueLabel} · ${fieldLabel}` : fieldLabel;
+          titleEl.textContent = `Live match — ${fieldLabel}`;
 
           // Join viewer counter
           const viewerCount = await joinSession(sessionId);
 
-          // Build meta row
-          const metaParts = [];
-          if (data.field_name) {
-            metaParts.push(`<span class="meta-item">📍 ${data.field_name}</span>`);
-          }
           if (viewerCount !== null) {
-            metaParts.push(`
-              <span class="meta-item" id="viewer-count-el">
-                <span class="viewer-dot"></span>
-                <span id="viewer-count">${viewerCount}</span> watching
-              </span>`);
+            viewerCountEl.style.display = "flex";
+            viewerTextEl.textContent = viewerCount <= 1 ? "Just you" : `${viewerCount} watching`;
           }
-          metaEl.innerHTML = metaParts.join("");
 
-          // Build HLS URL client-side so it works on phones
+          // Share button
+          const shareUrl = window.location.href;
+          const shareTitle = venueLabel ? `${venueLabel} · ${fieldLabel}` : fieldLabel;
+          shareBtnEl.style.display = "inline-flex";
+          shareBtnEl.addEventListener("click", () => shareSession(shareUrl, shareTitle));
+
+          // Bottom bar
+          bottomBar.style.display = "";
+
+          // HLS
           const hlsUrl = `http://${window.location.hostname}:8888/${data.stream_path}/index.m3u8`;
-
           let reconnectTimer = null;
 
           function startHls() {
@@ -248,9 +460,7 @@
 
           startHls();
 
-          // Load session clips
           await loadClips(sessionId);
-
           await postEvent(sessionId, "open", { userAgent: navigator.userAgent });
 
           window.addEventListener("beforeunload", () => {

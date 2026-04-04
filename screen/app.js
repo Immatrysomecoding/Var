@@ -4,18 +4,25 @@ const DVR_WINDOW_SECONDS = 60;
 
 const video = document.getElementById("player");
 const timeline = document.getElementById("timeline");
+const scrubFill = document.getElementById("scrubFill");
 const timelineCurrent = document.getElementById("timelineCurrent");
-const statusEl = document.getElementById("status");
+const statusBar = document.getElementById("statusBar");
 const liveDot = document.getElementById("liveDot");
 const liveText = document.getElementById("liveText");
-const screenTitle = document.getElementById("screenTitle");
+const courtName = document.getElementById("courtName");
+const venueName = document.getElementById("venueName");
 const fieldSelect = document.getElementById("field-select");
-const camRow = document.getElementById("cam-row");
+const camThumbs = document.getElementById("cam-thumbs");
 
 const back5Btn = document.getElementById("back5");
 const forward5Btn = document.getElementById("forward5");
 const goLiveBtn = document.getElementById("goLive");
 const clipBtn = document.getElementById("clipBtn");
+
+// ── URL param: ?court=<fieldId> ───────────────────────────────────────────────
+
+const urlParams = new URLSearchParams(window.location.search);
+const courtParam = urlParams.get("court");
 
 // ── PIN overlay ───────────────────────────────────────────────────────────────
 
@@ -66,7 +73,8 @@ let currentCamera = null;
 let currentFieldId = null;
 let sessionId = null;
 let reconnectTimer = null;
-let venueConfig = null;  // full /api/config response
+let venueConfig = null;
+let currentFieldCameras = [];
 
 // ── HLS utils ─────────────────────────────────────────────────────────────────
 
@@ -85,13 +93,18 @@ function updateLiveState() {
     liveDot.classList.add("live");
     liveText.textContent = "LIVE";
     timeline.value = 0;
+    scrubFill.style.width = "100%";
     timelineCurrent.textContent = "LIVE";
+    timelineCurrent.classList.add("at-live");
   } else {
     liveDot.classList.remove("live");
     liveText.textContent = "LIVE";
     const behind = Math.round(video.duration - video.currentTime);
     timeline.value = -behind;
+    const pct = ((DVR_WINDOW_SECONDS - behind) / DVR_WINDOW_SECONDS) * 100;
+    scrubFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
     timelineCurrent.textContent = `${behind}s behind`;
+    timelineCurrent.classList.remove("at-live");
   }
 }
 
@@ -123,15 +136,16 @@ function destroyHls() {
 
 function loadCamera(cameraId) {
   currentCamera = cameraId;
-  const fieldName = currentFieldId
-    ? (venueConfig?.fields?.find(f => f.field_id === currentFieldId)?.name || currentFieldId)
-    : "";
   const camName = getCameraName(cameraId);
-  screenTitle.textContent = `${fieldName} — ${camName}`;
-  statusEl.textContent = `Loading ${camName}...`;
 
-  document.querySelectorAll(".cam-btn").forEach((btn) => {
-    btn.classList.toggle("active-cam", btn.dataset.cam === cameraId);
+  const field = venueConfig?.fields?.find(f => f.field_id === currentFieldId);
+  courtName.textContent = field?.name || currentFieldId || "VAR Screen";
+  venueName.textContent = venueConfig?.venue_name || "";
+
+  statusBar.textContent = `Loading ${camName}...`;
+
+  document.querySelectorAll(".cam-thumb").forEach((el) => {
+    el.classList.toggle("active", el.dataset.cam === cameraId);
   });
 
   destroyHls();
@@ -149,19 +163,19 @@ function loadCamera(cameraId) {
     hls.on(Hls.Events.MANIFEST_PARSED, async () => {
       try {
         await video.play();
-        statusEl.textContent = `Playing ${camName}`;
+        statusBar.textContent = `● Playing ${camName} · ${countOnlineCameras()} cameras online`;
         goLive();
       } catch {
-        statusEl.textContent = `Loaded ${camName}. Press play.`;
+        statusBar.textContent = `Loaded ${camName}. Press play.`;
       }
     });
     hls.on(Hls.Events.LEVEL_LOADED, () => updateLiveState());
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (data.fatal) {
-        statusEl.textContent = "Stream lost. Reconnecting in 3s...";
+        statusBar.textContent = "Stream lost. Reconnecting in 3s...";
         reconnectTimer = setTimeout(() => loadCamera(currentCamera), 3000);
       } else {
-        statusEl.textContent = `Playback issue: ${data.details || data.type}`;
+        statusBar.textContent = `Playback issue: ${data.details || data.type}`;
       }
     });
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -170,7 +184,7 @@ function loadCamera(cameraId) {
       try { await video.play(); } catch (_) {}
     }, { once: true });
   } else {
-    statusEl.textContent = "This browser does not support HLS playback.";
+    statusBar.textContent = "This browser does not support HLS playback.";
     return;
   }
 
@@ -186,36 +200,48 @@ function getCameraName(cameraId) {
   return cameraId;
 }
 
-// ── Camera buttons ────────────────────────────────────────────────────────────
+function countOnlineCameras() {
+  return currentFieldCameras.filter(c => c.streaming).length;
+}
 
-function renderCamButtons(cameras) {
-  // Remove old buttons (keep the row-label span)
-  document.querySelectorAll(".cam-btn").forEach(b => b.remove());
+// ── Camera layout (3-column thumbnails) ──────────────────────────────────────
+
+function renderCamLayout(cameras) {
+  currentFieldCameras = cameras;
+  camThumbs.innerHTML = "";
 
   for (const cam of cameras) {
-    const btn = document.createElement("button");
-    btn.className = "cam-btn" + (cam.camera_id === currentCamera ? " active-cam" : "");
-    if (!cam.streaming) btn.classList.add("offline-cam");
-    btn.dataset.cam = cam.camera_id;
-    btn.title = cam.streaming ? "Online" : "Offline / not streaming";
+    const thumb = document.createElement("div");
+    thumb.className = "cam-thumb" +
+      (cam.camera_id === currentCamera ? " active" : "") +
+      (!cam.streaming ? " offline" : "");
+    thumb.dataset.cam = cam.camera_id;
 
-    const dot = document.createElement("span");
-    dot.className = "cam-dot" + (cam.streaming ? " online" : "");
-    btn.appendChild(dot);
-    btn.appendChild(document.createTextNode(cam.name));
+    const statusDot = document.createElement("div");
+    statusDot.className = "cam-status-dot" + (cam.streaming ? " online" : "");
+    thumb.appendChild(statusDot);
 
-    if (!cam.streaming) {
-      btn.disabled = true;
-    } else {
-      btn.addEventListener("click", () => loadCamera(cam.camera_id));
+    const label = document.createElement("div");
+    label.className = "cam-thumb-label";
+    label.textContent = cam.name;
+    thumb.appendChild(label);
+
+    if (cam.streaming) {
+      thumb.addEventListener("click", () => loadCamera(cam.camera_id));
     }
-    camRow.appendChild(btn);
+
+    camThumbs.appendChild(thumb);
   }
 }
 
 // ── Field selector ────────────────────────────────────────────────────────────
 
 function renderFieldSelector(fields) {
+  if (courtParam) {
+    fieldSelect.style.display = "none";
+    return;
+  }
+
   fieldSelect.innerHTML = "";
   if (fields.length <= 1) {
     fieldSelect.style.display = "none";
@@ -236,16 +262,13 @@ async function switchField(fieldId) {
   currentCamera = null;
   destroyHls();
 
-  // Create new session for this field
   sessionId = null;
   await initSession(fieldId);
 
-  // Load cameras for this field
   const field = venueConfig?.fields?.find(f => f.field_id === fieldId);
   if (!field) return;
-  renderCamButtons(field.cameras);
+  renderCamLayout(field.cameras);
 
-  // Auto-load first online camera
   const firstOnline = field.cameras.find(c => c.streaming) || field.cameras[0];
   if (firstOnline) loadCamera(firstOnline.camera_id);
 }
@@ -262,39 +285,42 @@ async function init() {
   try {
     venueConfig = await loadVenueConfig();
   } catch (err) {
-    statusEl.textContent = "Could not load config from API. Retrying...";
+    statusBar.textContent = "Could not load config from API. Retrying...";
     setTimeout(init, 4000);
     return;
   }
 
-  // PIN check
   await checkPin(venueConfig.pin_required);
 
-  // Set default field
-  const fields = venueConfig.fields || [];
+  let fields = venueConfig.fields || [];
   if (fields.length === 0) {
-    statusEl.textContent = "No fields configured in values.yml.";
+    statusBar.textContent = "No fields configured in values.yml.";
     return;
+  }
+
+  // Apply ?court= param: lock to single court
+  if (courtParam) {
+    const locked = fields.find(f => f.field_id === courtParam);
+    if (locked) fields = [locked];
   }
 
   currentFieldId = fields[0].field_id;
 
-  // Render field selector
-  renderFieldSelector(fields);
+  courtName.textContent = fields[0].name || currentFieldId;
+  venueName.textContent = venueConfig.venue_name || "";
 
-  // Render camera buttons for default field
+  renderFieldSelector(venueConfig.fields || []);
+
   const defaultField = fields[0];
-  renderCamButtons(defaultField.cameras);
+  renderCamLayout(defaultField.cameras);
 
-  // Create session
   await initSession(currentFieldId);
 
-  // Load first online camera
   const firstOnline = defaultField.cameras.find(c => c.streaming) || defaultField.cameras[0];
   if (firstOnline) {
     loadCamera(firstOnline.camera_id);
   } else {
-    statusEl.textContent = "No cameras online. Waiting for stream...";
+    statusBar.textContent = "No cameras online. Waiting for stream...";
   }
 }
 
@@ -323,10 +349,11 @@ async function initSession(fieldId) {
 
 function generateQR(url) {
   const canvas = document.getElementById("qr-canvas");
+  const corner = document.getElementById("qr-corner");
   if (!canvas || typeof QRCode === "undefined") return;
-  QRCode.toCanvas(canvas, url, { width: 160, margin: 1 }, (err) => {
+  QRCode.toCanvas(canvas, url, { width: 80, margin: 1 }, (err) => {
     if (!err) {
-      document.getElementById("qr-section").style.display = "flex";
+      corner.classList.add("visible");
       document.getElementById("qr-url").textContent = url;
     }
   });
@@ -358,13 +385,13 @@ async function pollClipJob(jobId) {
     const res = await fetch(`${API_BASE}/clip/${jobId}`);
     const data = await res.json();
     if (data.status === "done") {
-      statusEl.textContent = `Clip ready: ${data.clip_file}`;
+      statusBar.textContent = `Clip ready: ${data.clip_file}`;
       window.open(data.clip_url, "_blank");
       return;
     } else if (data.status === "error") {
       throw new Error(data.error || "clip generation failed");
     }
-    statusEl.textContent = `Creating clip... (${(i + 1) * 2}s)`;
+    statusBar.textContent = `Creating clip... (${(i + 1) * 2}s)`;
   }
   throw new Error("clip timed out after 40s");
 }
@@ -403,8 +430,8 @@ document.querySelectorAll(".dur-btn").forEach((btn) => {
 });
 
 clipBtn.addEventListener("click", async () => {
-  if (!currentCamera) { statusEl.textContent = "No camera selected."; return; }
-  statusEl.textContent = `Creating clip from ${getCameraName(currentCamera)}...`;
+  if (!currentCamera) { statusBar.textContent = "No camera selected."; return; }
+  statusBar.textContent = `Creating clip from ${getCameraName(currentCamera)}...`;
   clipBtn.disabled = true;
 
   try {
@@ -425,12 +452,12 @@ clipBtn.addEventListener("click", async () => {
     if (data.job_id) {
       await pollClipJob(data.job_id);
     } else {
-      statusEl.textContent = `Clip ready: ${data.clip_file}`;
+      statusBar.textContent = `Clip ready: ${data.clip_file}`;
       window.open(data.clip_url, "_blank");
     }
   } catch (err) {
     console.error(err);
-    statusEl.textContent = `Clip failed: ${err.message}`;
+    statusBar.textContent = `Clip failed: ${err.message}`;
   } finally {
     clipBtn.disabled = false;
   }

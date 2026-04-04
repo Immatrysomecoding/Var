@@ -78,6 +78,31 @@
 
 ---
 
+## Phase 3.1 — UI/UX Redesign ✅ COMPLETE
+
+**Goal:** Professional courtside and spectator experience — camera grid, overlaid timeline, light viewer theme.
+
+#### Courtside screen (`screen/`)
+
+- [x] **Per-court URL lock** — `?court=<fieldId>` param filters to one court; field selector hidden; dev/fallback mode shows all courts
+- [x] **4-camera layout** — main feed (full-width 16:9) + 3-column thumbnail row; thumbnails are static dark tiles with name label + status dot; clicking promotes to main feed
+- [x] **Timeline overlay** — scrubber moved inside player as `position: absolute` bottom overlay; 3px white fill bar; `Xs behind` label (amber) turns `LIVE` (white) at live edge
+- [x] **Replay pill group** — `-5s` / `+5s` / `Go live` share one pill container with dividers; Go Live has red tint
+- [x] **Clip button separated** — `+ Clip` is a standalone blue button, `margin-left: auto` right-aligned
+- [x] **QR code bottom-right** — `position: absolute; bottom: 16px; right: 16px` inside `.app`; always visible without scrolling; 80px canvas
+- [x] **Visual polish** — `#0d1017` background; topbar: court name 17px/500, venue name 11px muted; status bar shows `● Playing <cam> · N cameras online`; `border-radius: 10px` throughout
+
+#### Spectator viewer (`viewer/`)
+
+- [x] **Light theme** — `background: #f8f7f4`, `color: #1a1a18`; white cards with `border: 0.5px solid #e2ddd5`; video stays black
+- [x] **Venue + field header** — muted 12px venue label above 18px/500 `Live match — <field>` title
+- [x] **Viewer count with pulse** — green dot + expanding CSS `@keyframes pulse` ring; "Just you" / "X watching"
+- [x] **Share button** — SVG icon, pill style; `navigator.share` on mobile; clipboard + "Link copied!" toast on desktop
+- [x] **Clip cards horizontal scroll** — 130px flex cards, `overflow-x: auto`, `scrollbar-width: none`; dark thumb, duration badge, camera name, time
+- [x] **Bottom status bar** — `● Stream active` left, `VAR Basic` right
+
+---
+
 ## Phase 4 — AI Integration
 
 **Goal:** Automatic highlights, officiating assistance, training data pipeline.

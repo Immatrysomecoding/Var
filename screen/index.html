@@ -7,7 +7,7 @@
     <style>
       body {
         margin: 0;
-        background: #0f1115;
+        background: #0d1017;
         color: #fff;
         font-family: Arial, sans-serif;
       }
@@ -15,184 +15,335 @@
       .app {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 16px;
+        padding: 16px 16px 80px 16px;
+        position: relative;
       }
+
+      /* ── Topbar ────────────────────────────────────────────────────────────── */
 
       .topbar {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
         margin-bottom: 12px;
-        gap: 12px;
-        flex-wrap: wrap;
       }
 
-      .title {
-        font-size: 24px;
-        font-weight: 700;
+      .topbar-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .court-name {
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.2;
+      }
+
+      .venue-name {
+        font-size: 11px;
+        color: #8b93a1;
       }
 
       .live-badge {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 12px;
+        padding: 6px 12px;
         border-radius: 999px;
         background: #1c212b;
         font-weight: 700;
+        font-size: 13px;
         user-select: none;
       }
 
       .dot {
-        width: 10px;
-        height: 10px;
+        width: 9px;
+        height: 9px;
         border-radius: 50%;
         background: #888;
       }
 
       .dot.live {
         background: #ff2b2b;
-        box-shadow: 0 0 10px rgba(255, 43, 43, 0.7);
+        box-shadow: 0 0 8px rgba(255, 43, 43, 0.7);
       }
+
+      /* ── Player ───────────────────────────────────────────────────────────── */
 
       .player-wrap {
+        position: relative;
         background: #000;
-        border-radius: 16px;
+        border-radius: 10px;
         overflow: hidden;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+        aspect-ratio: 16 / 9;
       }
 
-      video {
+      #player {
         width: 100%;
+        height: 100%;
         display: block;
         background: #000;
-        max-height: 72vh;
       }
 
-      .controls {
-        margin-top: 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
+      /* ── Timeline overlay ─────────────────────────────────────────────────── */
+
+      .timeline-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 8px 12px 10px;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+        pointer-events: none;
       }
 
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-      }
-
-      button {
-        border: 0;
-        border-radius: 10px;
-        padding: 10px 14px;
-        background: #222937;
-        color: #fff;
-        font-size: 14px;
+      .scrub-track {
+        width: 100%;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        position: relative;
+        pointer-events: all;
         cursor: pointer;
       }
 
-      button:hover {
-        background: #2d3648;
-      }
-
-      button.primary {
-        background: #2e7dff;
-      }
-
-      button.live {
-        background: #c62828;
-      }
-
-      button.active-cam {
-        outline: 2px solid #7fb3ff;
-        background: #31405d;
-      }
-
-      button.offline-cam {
-        opacity: 0.45;
-        cursor: default;
-      }
-
-      .cam-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 5px;
-        background: #888;
-        vertical-align: middle;
-      }
-
-      .cam-dot.online {
-        background: #22c55e;
-      }
-
-      .timeline-wrap {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      input[type="range"] {
+      .scrub-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background: #fff;
+        border-radius: 2px;
+        pointer-events: none;
         width: 100%;
+      }
+
+      #timeline {
+        position: absolute;
+        inset: -6px 0;
+        width: 100%;
+        height: calc(100% + 12px);
+        opacity: 0;
+        cursor: pointer;
+        margin: 0;
+        padding: 0;
       }
 
       .timeline-labels {
         display: flex;
         justify-content: space-between;
-        font-size: 13px;
-        color: #b8c0cc;
-      }
-
-      .status {
-        font-size: 13px;
-        color: #b8c0cc;
-      }
-
-      .row-label {
-        font-size: 13px;
-        color: #b8c0cc;
-        white-space: nowrap;
-      }
-
-      button.active-dur {
-        outline: 2px solid #7fb3ff;
-        background: #31405d;
-      }
-
-      #qr-section {
-        display: none;
-        align-items: center;
-        gap: 12px;
-        padding: 10px;
-        background: #1c212b;
-        border-radius: 12px;
-      }
-
-      #qr-url {
+        margin-top: 5px;
         font-size: 11px;
-        color: #b8c0cc;
-        word-break: break-all;
-        max-width: 240px;
+        pointer-events: none;
       }
 
-      select {
-        border: 0;
+      .label-left { color: rgba(255, 255, 255, 0.5); }
+
+      .label-center { color: #f59e0b; }
+
+      .label-center.at-live { color: #fff; }
+
+      /* ── Camera thumbnails ───────────────────────────────────────────────── */
+
+      .cam-thumbs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .cam-thumb {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        background: #111620;
         border-radius: 10px;
-        padding: 10px 14px;
-        background: #222937;
+        overflow: hidden;
+        cursor: pointer;
+        border: 1.5px solid transparent;
+        transition: border-color 0.15s;
+      }
+
+      .cam-thumb.active {
+        border-color: #3b82f6;
+      }
+
+      .cam-thumb.offline {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .cam-thumb-label {
+        position: absolute;
+        bottom: 6px;
+        left: 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.85);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      }
+
+      .cam-thumb.offline .cam-thumb-label {
+        opacity: 0.5;
+      }
+
+      .cam-status-dot {
+        position: absolute;
+        top: 7px;
+        right: 8px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #888;
+      }
+
+      .cam-status-dot.online {
+        background: #22c55e;
+      }
+
+      /* ── Controls ────────────────────────────────────────────────────────── */
+
+      .controls {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .controls-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* Pill group */
+      .pill-group {
+        display: inline-flex;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #2a3040;
+      }
+
+      .pill-group button {
+        border: 0;
+        border-radius: 0;
+        padding: 9px 14px;
+        background: #1c2130;
         color: #fff;
         font-size: 14px;
         cursor: pointer;
+        border-right: 1px solid #2a3040;
       }
 
-      select:focus {
-        outline: 2px solid #7fb3ff;
+      .pill-group button:last-child {
+        border-right: 0;
       }
 
-      /* ── PIN overlay ───────────────────────────────────────────────────── */
+      .pill-group button:hover {
+        background: #2a3350;
+      }
+
+      .pill-group button.live-btn {
+        background: #3d1515;
+        color: #ff7070;
+      }
+
+      .pill-group button.live-btn:hover {
+        background: #5a1d1d;
+      }
+
+      .clip-btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 9px 16px;
+        background: #2e7dff;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        margin-left: auto;
+        font-weight: 500;
+      }
+
+      .clip-btn:hover { background: #3d8aff; }
+      .clip-btn:disabled { opacity: 0.5; cursor: default; }
+
+      .dur-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .row-label {
+        font-size: 12px;
+        color: #8b93a1;
+        white-space: nowrap;
+      }
+
+      .dur-btn {
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 11px;
+        background: #1c2130;
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .dur-btn:hover { background: #2a3350; }
+
+      .dur-btn.active-dur {
+        background: #31405d;
+        outline: 1.5px solid #7fb3ff;
+      }
+
+      /* ── Field select ────────────────────────────────────────────────────── */
+
+      select {
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 10px;
+        background: #1c2130;
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+        margin-top: 4px;
+      }
+
+      /* ── Status bar ──────────────────────────────────────────────────────── */
+
+      .status-bar {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #5a6375;
+      }
+
+      /* ── QR corner ───────────────────────────────────────────────────────── */
+
+      #qr-corner {
+        display: none;
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        align-items: center;
+        gap: 8px;
+        background: rgba(20, 25, 36, 0.92);
+        border-radius: 10px;
+        padding: 8px 10px;
+      }
+
+      #qr-corner.visible {
+        display: flex;
+      }
+
+      #qr-url {
+        font-size: 10px;
+        color: #8b93a1;
+        max-width: 160px;
+        word-break: break-all;
+      }
+
+      /* ── PIN overlay ─────────────────────────────────────────────────────── */
 
       #pin-overlay {
         display: none;
@@ -206,14 +357,9 @@
         gap: 16px;
       }
 
-      #pin-overlay.active {
-        display: flex;
-      }
+      #pin-overlay.active { display: flex; }
 
-      #pin-overlay h2 {
-        margin: 0;
-        font-size: 22px;
-      }
+      #pin-overlay h2 { margin: 0; font-size: 22px; }
 
       #pin-input {
         font-size: 28px;
@@ -235,75 +381,75 @@
     </style>
   </head>
   <body>
-    <!-- PIN overlay (shown only if pin_required) -->
+    <!-- PIN overlay -->
     <div id="pin-overlay">
       <h2>Screen PIN Required</h2>
       <input id="pin-input" type="password" maxlength="8" placeholder="••••" autocomplete="off" />
-      <button class="primary" id="pin-submit">Unlock</button>
+      <button style="border:0;border-radius:10px;padding:10px 18px;background:#2e7dff;color:#fff;font-size:14px;cursor:pointer" id="pin-submit">Unlock</button>
       <div id="pin-error"></div>
     </div>
 
     <div class="app">
+      <!-- Topbar -->
       <div class="topbar">
-        <div class="title" id="screenTitle">VAR Screen</div>
-        <div class="row" style="gap:10px">
+        <div class="topbar-left">
+          <div class="court-name" id="courtName">VAR Screen</div>
+          <div class="venue-name" id="venueName"></div>
           <select id="field-select" style="display:none"></select>
-          <div class="live-badge" id="liveBadge">
-            <span class="dot" id="liveDot"></span>
-            <span id="liveText">LIVE</span>
-          </div>
+        </div>
+        <div class="live-badge" id="liveBadge">
+          <span class="dot" id="liveDot"></span>
+          <span id="liveText">LIVE</span>
         </div>
       </div>
 
+      <!-- Main player -->
       <div class="player-wrap">
         <video id="player" controls playsinline webkit-playsinline></video>
-      </div>
-
-      <div class="controls">
-        <div class="timeline-wrap">
-          <input
-            id="timeline"
-            type="range"
-            min="-60"
-            max="0"
-            step="1"
-            value="0"
-          />
+        <!-- Timeline overlay -->
+        <div class="timeline-overlay">
+          <div class="scrub-track">
+            <div class="scrub-fill" id="scrubFill"></div>
+            <input id="timeline" type="range" min="-60" max="0" step="1" value="0" />
+          </div>
           <div class="timeline-labels">
-            <span>-60s</span>
-            <span id="timelineCurrent">LIVE</span>
+            <span class="label-left">-60s</span>
+            <span class="label-center at-live" id="timelineCurrent">LIVE</span>
+            <span></span>
           </div>
         </div>
+      </div>
 
-        <div class="row">
-          <button id="back5">-5s</button>
-          <button id="forward5">+5s</button>
-          <button id="goLive" class="live">Go Live</button>
-          <button id="clipBtn" class="primary">Clip</button>
+      <!-- Camera thumbnails (3-column) -->
+      <div class="cam-thumbs" id="cam-thumbs"></div>
+
+      <!-- Controls -->
+      <div class="controls">
+        <div class="controls-row">
+          <div class="pill-group">
+            <button id="back5">-5s</button>
+            <button id="forward5">+5s</button>
+            <button id="goLive" class="live-btn">Go live</button>
+          </div>
+          <button class="clip-btn" id="clipBtn">+ Clip</button>
         </div>
 
-        <div class="row">
+        <div class="dur-row">
           <span class="row-label">Clip duration:</span>
           <button class="dur-btn" data-dur="5">5s</button>
           <button class="dur-btn active-dur" data-dur="10">10s</button>
           <button class="dur-btn" data-dur="15">15s</button>
           <button class="dur-btn" data-dur="30">30s</button>
         </div>
+      </div>
 
-        <!-- Camera buttons are dynamically inserted here -->
-        <div class="row" id="cam-row">
-          <span class="row-label" id="cam-row-label">Cameras:</span>
-        </div>
+      <!-- Status bar -->
+      <div class="status-bar" id="statusBar">Starting…</div>
 
-        <div class="status" id="status">Starting…</div>
-
-        <div id="qr-section">
-          <canvas id="qr-canvas"></canvas>
-          <div>
-            <div class="status">Scan to watch on phone:</div>
-            <div id="qr-url"></div>
-          </div>
-        </div>
+      <!-- QR corner (bottom-right, always visible) -->
+      <div id="qr-corner">
+        <canvas id="qr-canvas"></canvas>
+        <div id="qr-url"></div>
       </div>
     </div>
 

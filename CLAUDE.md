@@ -36,10 +36,10 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 
 ### What Is Broken / Incomplete
 
-| #   | Issue                                               | Severity   | Status | File          |
-| --- | --------------------------------------------------- | ---------- | ------ | ------------- |
-| 1   | Fake camera pushes `court1_camA` — only cam A works | **MEDIUM** | Known  | `fake-camera.yml` |
-| 2   | Viewer counter resets on API restart (in-memory)    | **LOW**    | By design |            |
+| #   | Issue                                               | Severity   | Status    | File              |
+| --- | --------------------------------------------------- | ---------- | --------- | ----------------- |
+| 1   | Fake camera pushes `court1_camA` — only cam A works | **MEDIUM** | Known     | `fake-camera.yml` |
+| 2   | Viewer counter resets on API restart (in-memory)    | **LOW**    | By design |                   |
 
 ---
 
@@ -52,6 +52,8 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 ### Phase 2.5 — Cleanup & Foundation ✅ COMPLETE
 
 ### Phase 3 — Platform ✅ COMPLETE
+
+### Phase 3.1 — UI/UX ✅ COMPLETE
 
 **Goal:** Multi-court, multi-venue, production-deployable.
 
@@ -139,6 +141,7 @@ sh tests/smoke_test.sh
 ```
 
 **Test API:**
+
 ```powershell
 Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/config
 Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/fields
@@ -153,29 +156,29 @@ HLS stream: `http://localhost:8888/{cameraId}/index.m3u8`
 
 ## Key Files
 
-| File                         | Purpose                                               |
-| ---------------------------- | ----------------------------------------------------- |
-| `values.yml`                 | **Master config** — venue, fields, cameras, PIN       |
-| `.env.example`               | Copy to `.env`; set MEDIA_HOST for your network       |
-| `api/main.py`                | App init, lifespan (DB seed), middleware, mounts      |
-| `api/config.py`              | All config: loads values.yml + env var overrides      |
-| `api/database.py`            | DB connection, schema, migrations, cleanup, disk check |
-| `api/models.py`              | Pydantic request models                               |
-| `api/routers/sessions.py`    | `/api/session` CRUD + join/leave viewer counter       |
-| `api/routers/events.py`      | `/api/event` endpoint                                 |
-| `api/routers/clips.py`       | `/api/clip` + `/api/clips` endpoints + FFmpeg runner  |
-| `api/routers/config_api.py`  | `/api/config`, `/api/fields`, `/api/cameras/{id}/status`, `/api/config/verify-pin` |
-| `api/routers/health.py`      | `/api/health` + `/api/health/detailed`                |
-| `screen/app.js`              | Courtside UI — dynamic cameras, field selector, PIN   |
-| `screen/index.html`          | Courtside UI layout                                   |
-| `viewer/index.html`          | Public viewer — venue/field name, viewer count, clips |
-| `recorder/record.sh`         | FFmpeg RTSP → 5s MP4 segments; reads cameras from values.yml |
-| `docker-compose.yml`         | Service orchestration; mounts values.yml; reads .env  |
-| `mediamtx.yml`               | HLS hub config (wildcard path, LL-HLS, API enabled)   |
-| `fake-camera.yml`            | Dev compose override (loops sample.mp4 as court1_camA) |
-| `tests/conftest.py`          | pytest fixtures (temp DB, in-process ASGI client)     |
-| `tests/test_api.py`          | Integration tests (17 tests, all passing)             |
-| `tests/smoke_test.sh`        | End-to-end smoke test (curl-based, stack must be up)  |
+| File                        | Purpose                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| `values.yml`                | **Master config** — venue, fields, cameras, PIN                                    |
+| `.env.example`              | Copy to `.env`; set MEDIA_HOST for your network                                    |
+| `api/main.py`               | App init, lifespan (DB seed), middleware, mounts                                   |
+| `api/config.py`             | All config: loads values.yml + env var overrides                                   |
+| `api/database.py`           | DB connection, schema, migrations, cleanup, disk check                             |
+| `api/models.py`             | Pydantic request models                                                            |
+| `api/routers/sessions.py`   | `/api/session` CRUD + join/leave viewer counter                                    |
+| `api/routers/events.py`     | `/api/event` endpoint                                                              |
+| `api/routers/clips.py`      | `/api/clip` + `/api/clips` endpoints + FFmpeg runner                               |
+| `api/routers/config_api.py` | `/api/config`, `/api/fields`, `/api/cameras/{id}/status`, `/api/config/verify-pin` |
+| `api/routers/health.py`     | `/api/health` + `/api/health/detailed`                                             |
+| `screen/app.js`             | Courtside UI — dynamic cameras, field selector, PIN                                |
+| `screen/index.html`         | Courtside UI layout                                                                |
+| `viewer/index.html`         | Public viewer — venue/field name, viewer count, clips                              |
+| `recorder/record.sh`        | FFmpeg RTSP → 5s MP4 segments; reads cameras from values.yml                       |
+| `docker-compose.yml`        | Service orchestration; mounts values.yml; reads .env                               |
+| `mediamtx.yml`              | HLS hub config (wildcard path, LL-HLS, API enabled)                                |
+| `fake-camera.yml`           | Dev compose override (loops sample.mp4 as court1_camA)                             |
+| `tests/conftest.py`         | pytest fixtures (temp DB, in-process ASGI client)                                  |
+| `tests/test_api.py`         | Integration tests (17 tests, all passing)                                          |
+| `tests/smoke_test.sh`       | End-to-end smoke test (curl-based, stack must be up)                               |
 
 ---
 

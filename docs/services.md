@@ -6,8 +6,8 @@
 | ---------- | ---------------------------- | ---------------- | ------------------------ |
 | `mediamtx` | `bluenviron/mediamtx:latest` | 8554, 8888, 9997 | RTSP → HLS hub + API     |
 | `api`      | Python 3.12 (custom)         | 8000             | Sessions, events, clips  |
-| `screen`   | `nginx:alpine`               | 8082             | Courtside display        |
-| `viewer`   | `nginx:alpine`               | 8081             | Public spectator         |
+| `screen`   | `nginx:alpine`               | 8082             | Courtside display — 4-cam grid, timeline overlay, pill controls, QR |
+| `viewer`   | `nginx:alpine`               | 8081             | Public spectator — light theme, pulse viewer count, share button     |
 | `recorder` | `linuxserver/ffmpeg:latest`  | —                | RTSP → 5s MP4 segments   |
 
 All services have health checks and memory/CPU resource limits defined in `docker-compose.yml`.
@@ -74,6 +74,27 @@ After a clip job completes, two files are written:
 ```
 
 A row is also inserted into the `clips` table. Clips are served as static files at `http://host:8000/clips/{session_id}/{clip_id}.mp4`.
+
+## Frontend UI
+
+### Courtside screen (port 8082)
+
+- URL param `?court=<fieldId>` locks screen to one court; field selector hidden
+- All camera buttons loaded from `GET /api/config` at startup
+- Main feed streams HLS; thumbnails are static dark tiles (no extra HLS instances)
+- Timeline scrubber is overlaid on video (`position: absolute`)
+- QR code is `position: absolute; bottom/right` inside `.app` — always visible
+- PIN overlay shown if `access.screen_pin` is set in `values.yml`
+
+### Spectator viewer (port 8081)
+
+- Accessed via `/f/{sessionId}` (or `?id=` query param)
+- Light theme: `#f8f7f4` background, white cards
+- Calls `POST /api/session/{id}/join` on load, `POST /leave` on `beforeunload`
+- Share button uses `navigator.share` on mobile; falls back to clipboard copy
+- Clips rendered as horizontal scroll cards, each opening `clip_url` in new tab
+
+---
 
 ## Config System
 
