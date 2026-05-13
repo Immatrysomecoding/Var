@@ -11,11 +11,11 @@
 
 Goal: YouTube-quality live streaming + professional VAR replay, running on a local edge machine at a venue.
 
-Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Nginx
+Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Nginx · React (Lavaro UI)
 
 ---
 
-## Current State (as of 2026-03-30)
+## Current State (as of 2026-05-13)
 
 ### What Works
 
@@ -33,6 +33,7 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 - **All config driven by values.yml** (venue, fields, cameras, PIN)
 - **Structured JSON logging** to stdout
 - **Disk space warning** if `/data` < 5 GB free
+- **Lavaro UI** — production-grade React frontend (replaces old plain HTML screens)
 
 ### What Is Broken / Incomplete
 
@@ -40,6 +41,7 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 | --- | --------------------------------------------------- | ---------- | --------- | ----------------- |
 | 1   | Fake camera pushes `court1_camA` — only cam A works | **MEDIUM** | Known     | `fake-camera.yml` |
 | 2   | Viewer counter resets on API restart (in-memory)    | **LOW**    | By design |                   |
+| 3   | Score not synced to backend — local state only      | **LOW**    | By design | No score API yet  |
 
 ---
 
@@ -55,29 +57,26 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 
 ### Phase 3.1 — UI/UX ✅ COMPLETE
 
-**Goal:** Multi-court, multi-venue, production-deployable.
+### Phase 3.2 — Lavaro UI ✅ COMPLETE
 
-- [x] **values.yml is now the config source of truth** — venue name, field list, camera list, PIN all come from values.yml; env vars override at deploy time
-- [x] **mediamtx wildcard path** — `~.*: {}` accepts any camera stream without pre-registration
-- [x] **recorder reads cameras from values.yml** — grep/sed parser in record.sh; falls back to DEFAULT_CAMERAS env var
-- [x] **DB migrations** — `fields` table added; `sessions.venue_id`, `events.camera_id`, `cameras.position` added via ALTER TABLE; all existing data preserved
-- [x] **venues/fields/cameras seeded from values.yml** on every API startup (upsert, idempotent)
-- [x] **GET /api/config** — full venue + field + camera config, pin_required flag
-- [x] **GET /api/fields** + **GET /api/fields/{id}** — field + camera list with live streaming status
-- [x] **GET /api/cameras/{id}/status** — checks mediamtx API at :9997
-- [x] **POST /api/config/verify-pin** — client-side PIN validation
-- [x] **GET /api/health/detailed** — mediamtx, cameras, db, disk_free_gb
-- [x] **GET /api/clips** — filter by session_id and/or field_id
-- [x] **GET /api/session/{id}** — now includes venue_name, field_name, viewer_count
-- [x] **POST /api/session/{id}/join** + **/leave** — viewer counter
-- [x] **Screen UI dynamic cameras** — buttons loaded from /api/config at startup, offline cameras greyed out
-- [x] **Screen UI field selector** — dropdown shown when >1 field; switching reloads cameras + creates new session
-- [x] **Screen PIN lock** — overlay shown if `access.screen_pin` set in values.yml; PIN stored in sessionStorage
-- [x] **Viewer improvements** — shows venue + field name, viewer count, session clip list
-- [x] **Structured JSON logging** — Python logging with JSON formatter on all API output
-- [x] **Disk space warning** — logs warning every 30 min if /data < 5 GB free
-- [x] **17 integration tests** — all passing, cover all new endpoints
-- [x] **tests/smoke_test.sh** — hits every endpoint, prints PASS/FAIL
+**Goal:** Replace plain HTML screens with a branded, production-grade React UI that integrates fully with the VAR backend.
+
+- [x] **Landing page** — shown on the physical court monitor; single "Enter Courtside" button; no spectator entry
+- [x] **Courtside interface** at `/courtside` — full operator view integrated with API
+- [x] **Spectator view** at `/f/:sessionId` — direct URL (no landing page), accessed by scanning QR
+- [x] **Real HLS video** — HLS.js player connected to MediaMTX streams
+- [x] **Timeline scrubber** — syncs to actual HLS DVR position; seeks real video
+- [x] **Camera grid from API** — cameras loaded from `GET /api/config`; online/offline polled every 15s
+- [x] **Field selector** — dropdown shown when venue has multiple courts
+- [x] **PIN overlay** — calls `POST /api/config/verify-pin`; result stored in sessionStorage
+- [x] **Session lifecycle** — `POST /api/session` on field select; join/leave on spectator entry/exit
+- [x] **Real clip saving** — `POST /api/clip` with real session_id, camera_id, offset, duration
+- [x] **Clip history** — `GET /api/clips?session_id=...`; auto-refreshes every 15s; animated on new entry
+- [x] **Real QR code** — generated from `/f/{sessionId}` URL using qrcode.react
+- [x] **System status strip** — mediamtx health + disk space from `GET /api/health/detailed`
+- [x] **Score widget** — local state with Framer Motion pulse animation + Akira Expanded font
+- [x] **Lavaro brand** — exact hex palette, Unbounded + Akira Expanded fonts, breathing dots, shimmer states
+- [x] **17 integration tests** — all passing after UI changes
 
 ---
 
@@ -86,31 +85,33 @@ Stack: FastAPI · MediaMTX · HLS.js · FFmpeg · SQLite · Docker Compose · Ng
 ```
 values.yml  ──→  api/config.py  ──→  DB seed (venues/fields/cameras)
                                  └──→  GET /api/config|fields|cameras
-                                 └──→  PIN check (screen)
+                                 └──→  PIN check
 
 RTSP cameras / fake-camera FFmpeg
         ↓
    MediaMTX (port 8554 RTSP in, 8888 HLS out, 9997 API)
    wildcard path ~.*: {} — accepts any stream
-        ↓              ↓
-   recorder       HLS stream
-   (record.sh,    ↓
-   reads cam list screen/app.js  ← loads cameras from /api/config
-   from values.yml) viewer/index.html ← shows venue/field/viewers/clips
+        ↓
+   HLS stream ──→  Lavaro UI (React, port 3000)
+                   ├── /            Landing page (court monitor)
+                   ├── /courtside   Operator interface
+                   └── /f/:id       Spectator view (QR entry)
+
+   recorder (record.sh) reads cameras from values.yml
         ↓
    /data/recordings/{venue_id}/{field_id}/{cameraId}/{YYYY-MM-DD}/{HH-MM-SS}.mp4
         ↓
    api/routers/clips.py  POST /api/clip
    → FFmpeg concat → trim → /data/clips/{session_id}/{clip_id}.mp4
-                          → /data/clips/{session_id}/{clip_id}.json
 ```
 
 **Ports:**
 | Port | Service |
 |------|---------|
 | 8000 | API (FastAPI) |
-| 8081 | Viewer (spectator) |
-| 8082 | Screen (courtside) |
+| 3000 | Lavaro UI (React / Vite dev server) |
+| 8081 | Legacy viewer HTML (still served by Nginx, now superseded) |
+| 8082 | Legacy screen HTML (still served by Nginx, now superseded) |
 | 8554 | MediaMTX RTSP input |
 | 8888 | MediaMTX HLS output |
 | 9997 | MediaMTX API (internal) |
@@ -119,42 +120,69 @@ RTSP cameras / fake-camera FFmpeg
 
 ## Running the System
 
-```bash
-# 1. Copy .env.example → .env and set MEDIA_HOST to your LAN IP
-cp .env.example .env
-# Edit .env: MEDIA_HOST=192.168.1.50
+### 1. Start / Stop (daily use)
 
-# Dev (fake looped camera)
-docker compose -f docker-compose.yml -f fake-camera.yml up --build
-
-# Stop
-docker compose -f docker-compose.yml -f fake-camera.yml down
-
-# Production (real cameras)
-docker compose up --build
-
-# Run integration tests (local Python, no Docker needed)
-python -m pytest tests/ -v
-
-# Smoke test (requires running stack)
-sh tests/smoke_test.sh
+```
+on.bat    ← double-click when customer arrives
+off.bat   ← double-click when done
 ```
 
-**Test API:**
+Both files are in the project root. `on.bat` starts the Docker backend and the Lavaro UI server. `off.bat` stops everything.
 
+> **First-time setup only:**
+> ```bash
+> cp .env.example .env
+> # Edit .env: set MEDIA_HOST to your LAN IP (e.g. 192.168.1.50)
+>
+> cd lavaro-ui-mockup
+> pnpm install        # install UI dependencies once
+> cp .env.example .env
+> # Edit lavaro-ui-mockup/.env: set VITE_MEDIA_HOST to same LAN IP
+> ```
+
+### 3. How to check the UI
+
+| What to check | URL |
+|---------------|-----|
+| Landing page (court monitor view) | `http://localhost:3000/` |
+| Courtside operator interface | `http://localhost:3000/courtside` |
+| Spectator view (replace ID) | `http://localhost:3000/f/{sessionId}` |
+| Get a real session ID | See PowerShell command below |
+
+**Get a session ID to test the spectator view:**
 ```powershell
-Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/config
-Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/fields
+# Creates a session and returns the session_id
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/session `
   -ContentType "application/json" `
   -Body '{"field_id":"court-1","stream_path":"court1_camA"}'
+# Copy the session_id value, then open:
+# http://localhost:3000/f/{session_id}
 ```
 
-HLS stream: `http://localhost:8888/{cameraId}/index.m3u8`
+**Test API directly:**
+```powershell
+Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/config
+Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/fields
+Invoke-RestMethod -Method Get  -Uri http://localhost:8000/api/health/detailed
+```
+
+### 4. Run tests
+
+```bash
+# Integration tests (no Docker needed)
+python -m pytest tests/ -v
+
+# Smoke test (requires Docker stack running)
+sh tests/smoke_test.sh
+```
+
+**Expected result:** `17 passed` — all green.
 
 ---
 
 ## Key Files
+
+### Backend
 
 | File                        | Purpose                                                                            |
 | --------------------------- | ---------------------------------------------------------------------------------- |
@@ -169,9 +197,6 @@ HLS stream: `http://localhost:8888/{cameraId}/index.m3u8`
 | `api/routers/clips.py`      | `/api/clip` + `/api/clips` endpoints + FFmpeg runner                               |
 | `api/routers/config_api.py` | `/api/config`, `/api/fields`, `/api/cameras/{id}/status`, `/api/config/verify-pin` |
 | `api/routers/health.py`     | `/api/health` + `/api/health/detailed`                                             |
-| `screen/app.js`             | Courtside UI — dynamic cameras, field selector, PIN                                |
-| `screen/index.html`         | Courtside UI layout                                                                |
-| `viewer/index.html`         | Public viewer — venue/field name, viewer count, clips                              |
 | `recorder/record.sh`        | FFmpeg RTSP → 5s MP4 segments; reads cameras from values.yml                       |
 | `docker-compose.yml`        | Service orchestration; mounts values.yml; reads .env                               |
 | `mediamtx.yml`              | HLS hub config (wildcard path, LL-HLS, API enabled)                                |
@@ -180,16 +205,41 @@ HLS stream: `http://localhost:8888/{cameraId}/index.m3u8`
 | `tests/test_api.py`         | Integration tests (17 tests, all passing)                                          |
 | `tests/smoke_test.sh`       | End-to-end smoke test (curl-based, stack must be up)                               |
 
+### Lavaro UI (`lavaro-ui-mockup/`)
+
+| File                                      | Purpose                                                         |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `client/src/pages/Home.tsx`               | Landing page — court monitor entry, Courtside button only       |
+| `client/src/pages/Courtside.tsx`          | Operator interface — cameras, video, score, clips, QR           |
+| `client/src/pages/Spectator.tsx`          | Spectator view — loaded via QR scan at `/f/:sessionId`          |
+| `client/src/lib/api.ts`                   | Typed API client — all fetch calls to FastAPI backend           |
+| `client/src/hooks/useHlsPlayer.ts`        | HLS.js player hook — attach/detach, DVR seek, live edge detect  |
+| `client/src/hooks/useScoreAnimation.ts`   | Score pulse animation trigger (Framer Motion)                   |
+| `client/src/hooks/useClipSave.ts`         | 3-state clip save machine (idle → saving → saved)               |
+| `client/src/components/BreathingDot.tsx`  | Animated breathing status dot (live/recording indicators)       |
+| `client/src/index.css`                    | Brand tokens, Unbounded + Akira Expanded fonts, keyframes       |
+| `.env.example`                            | UI env vars: VITE_API_BASE_URL, VITE_MEDIA_HOST                 |
+
+### Legacy (still functional, superseded by Lavaro UI)
+
+| File                  | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| `screen/index.html`   | Old plain-HTML courtside screen (port 8082)    |
+| `screen/app.js`       | Old courtside JS — camera switching, HLS, clips|
+| `viewer/index.html`   | Old plain-HTML spectator viewer (port 8081)    |
+
 ---
 
 ## Known Constraints
 
-- **Fake camera:** Only pushes `court1_camA`. Other cameras show as offline in the UI (expected in dev).
+- **Fake camera:** Only pushes `court1_camA`. Other cameras show as offline (expected in dev).
 - **Viewer counter:** In-memory dict, resets on API restart.
-- **mediamtx camera status:** Only cameras that are actively streaming appear as online.
+- **mediamtx camera status:** Only actively streaming cameras appear online.
 - **Clip generation:** Runs in thread pool (2 workers). Each clip blocks one worker for several seconds.
-- **Windows dev:** Running on Windows 11. Paths in FFmpeg concat file must use forward slashes (handled via `.as_posix()`).
+- **Windows dev:** Running on Windows 11. FFmpeg concat paths use forward slashes (handled via `.as_posix()`).
 - **PIN security:** PIN lock is accidental-touch prevention only — not authentication.
+- **Score:** Scoreboard is local React state only — not persisted or synced via API.
+- **Lavaro UI dev server:** Runs separately from Docker on port 3000. In production, build with `pnpm build` and serve `dist/public/` via Nginx.
 
 ---
 
